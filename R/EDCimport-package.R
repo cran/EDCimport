@@ -1,13 +1,6 @@
 #' @keywords internal
-#' @import dplyr
-#' @import forcats
-#' @import glue
-#' @import labelled
-#' @rawNamespace import(purrr, except=c(invoke, flatten_raw, as_function, flatten_dbl, flatten_lgl, flatten_int, `%@%`, flatten_chr, splice, flatten)) 
-#' @import rlang
-#' @import stringr
-#' @import tidyr
-#' @importFrom cli cli_warn cli_abort cli_inform
+#' @importFrom dplyr %>% 
+#' @importFrom rlang %||% := 
 "_PACKAGE"
 
 ## usethis namespace: start
@@ -15,4 +8,12 @@
 NULL
 
 
-globalVariables(c(".", ":=", "!!"))
+
+# Global settings -----------------------------------------------------------------------------
+
+
+#' @importFrom dplyr %>%
+#' @export
+dplyr::`%>%`
+
+globalVariables(c(".", ":=", "!!", "SUBJID", "age", "dataset", "n_id", "value"))

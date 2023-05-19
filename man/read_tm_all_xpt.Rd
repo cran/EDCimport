@@ -4,12 +4,33 @@
 \alias{read_tm_all_xpt}
 \title{Read all \code{.xpt} files in a directory}
 \usage{
-read_tm_all_xpt(directory, datetime_extraction)
+read_tm_all_xpt(
+  directory,
+  ...,
+  format_file = "procformat.sas",
+  clean_names_fun = NULL,
+  split_mixed = FALSE,
+  extend_lookup = TRUE,
+  key_columns = get_key_cols(),
+  datetime_extraction = NULL
+)
 }
 \arguments{
-\item{directory}{\verb{<character>} unzipped archive using SAS_XPORT format. Will read the extraction date from the directory name}
+\item{directory}{[\code{character(1)}]\cr the path to the unzipped archive using SAS_XPORT format. Will read the extraction date from the directory name.}
 
-\item{datetime_extraction}{the datetime of the data extraction}
+\item{...}{unused}
+
+\item{format_file}{[\code{character(1)}]\cr the path to the \code{procformat.sas} file that should be used to apply formats. Use \code{NULL} to not apply formats.}
+
+\item{clean_names_fun}{[\code{function}]\cr a function to clean column names, e.g. \code{\link[janitor:clean_names]{janitor::clean_names()}}}
+
+\item{split_mixed}{[\code{logical(1): FALSE}]\cr whether to split mixed datasets. See \link{split_mixed_datasets}.}
+
+\item{extend_lookup}{[\code{character(1): FALSE}]\cr whether to enrich the lookup table. See \link{extend_lookup}.}
+
+\item{key_columns}{[\code{list}]\cr the result of \code{\link[=get_key_cols]{get_key_cols()}}, containing the column name used for patient ID and CRF name. Important for \code{split_mixed} and \code{extend_lookup}.}
+
+\item{datetime_extraction}{[\code{POSIXt(1)}]\cr the datetime of the data extraction. Default to the most common date of last modification in \code{directory}.}
 }
 \value{
 a list containing one dataframe for each \code{.xpt} file in the folder, the extraction date (\code{datetime_extraction}), and a summary of all imported tables (\code{.lookup}). If not set yet, option \code{edc_lookup} is automatically set to \code{.lookup}.

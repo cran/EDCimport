@@ -5,6 +5,7 @@
 #'
 #' @return the path to 7zip executable directory
 #' @export
+#' @importFrom cli cli_abort
 get_7z_dir = function(){
   #TODO multiple default depending on OS?
   default = "C:/Program Files/7-Zip/"
@@ -43,6 +44,9 @@ get_7z_dir = function(){
 #' @return the success/error message. Mainly used for its side effect of extracting the archive.
 #' @seealso https://info.nrao.edu/computing/guide/file-access-and-archiving/7zip/7z-7za-command-line-guide#section-17
 #' @export
+#' @importFrom cli cli_abort cli_warn
+#' @importFrom glue glue
+#' @importFrom stringr str_detect
 extract_7z = function(archive, target_dir, password=NULL, path_7zip=NULL){
   if(!file.exists(archive)){
     cli_abort("Archive file {.val {archive}} does not exist.")
@@ -68,7 +72,7 @@ extract_7z = function(archive, target_dir, password=NULL, path_7zip=NULL){
   # browser()
   # pwc = if(is.null(password)) "" else password
   # msg = archive::archive_extract(archive, dir=target_dir, password=pwc)
-  # #TODO trycatch pour mauvais mot de passe
+  # TODO trycatch pour mauvais mot de passe
   # return(msg[1])
   
   status = attr(msg, "status")

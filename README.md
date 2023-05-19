@@ -1,4 +1,3 @@
-
 # EDCimport
 
 <!-- badges: start -->
@@ -21,41 +20,41 @@ devtools::install_github("DanChaltiel/EDCimport")
 
 You will also need [`7-zip`](https://www.7-zip.org/download.html) installed, and preferably added to the [`PATH`](https://www.java.com/en/download/help/path.html).
 
-Note that this package is expected to run on Windows. If you use any other OS, please contact me so we can make it work with them too.
+### Windows-only
+
+This package was developed to work on Windows and is unlikely to work on any other OS. Feel free to submit a PR if you manage to get it to work on another OS.
 
 ## TrialMaster
 
 ### Load the data
 
-First, you need to request an export of type `SAS Xport`, with the checkbox "Include Codelists" ticked. This export should generate a zip archive.
+First, you need to request an export of type `SAS Xport`, with the checkbox "Include Codelists" ticked. This export should generate a `.zip` archive.
 
-Then, simply provide the archive password using `options()` (if any), and use `read_trialmaster()` to load the data from the archive:
+Then, simply use `read_trialmaster()` with the archive password (if any) to retrieve the data from the archive:
 
 ``` r
 library(EDCimport)
-filename = "path/to/my/archive"
-options(trialmaster_pw="foobar")
-tm = read_trialmaster(filename)
+tm = read_trialmaster("path/to/my/archive.zip", pw="foobar")
 ```
-
-### Use the data
 
 The resulting object `tm` is a list containing all the datasets, plus the date of extraction (`datetime_extraction`) and a dataset summary (`.lookup`).
 
-You can now either use the resulting list, or load it to the global environment. For instance,
+You can now use `load_list()` to import the list in the global environment and use your tables:
 
 ``` r
-#use it directly
-mean(tm$dataset1$column5)
-
-#load it to the global env
-load_list(tm) #this also removes `tm` to save RAM
+load_list(tm) #this also removes `tm` to save memory
 mean(dataset1$column5)
 ```
 
-### Search the data
+There are other options available, e.g. colnames cleaning & table splitting), see `?read_trialmaster` for more details.
 
-The dataset lookup table `.lookup` is a dataframe containing for each dataset all its column names and labels.
+## Utils
+
+`EDCimport` include a set of useful tools that help with using the imported database.
+
+### Search the whole database
+
+`.lookup` is a dataframe containing for each dataset all its column names and labels.
 
 Its main use is to work with `find_keyword()`. For instance, say you do not remember in which dataset and column is located the "date of ECG". `find_keyword()` will search every column name and label and will give you the answer:
 
@@ -79,8 +78,26 @@ find_keyword("date")
 #> 10 vs      VISITDT Visit Date
 ```
 
-Note that `find_keyword()` uses the `edc_lookup` option, automatically set by `read_trialmaster()`.
+Note that `find_keyword()` uses the `edc_lookup` option as its second argument, automatically set by `read_trialmaster()`.
 
-## MACRO
+### Swimmer Plot
 
-Work in progress
+The `edc_swimmerplot()` function will create a swimmer plot of all date variables in the whole database.
+
+There are 2 arguments of interest:
+
+-   `group`, a grouping variable (e.g. the treatment arm)
+
+-   `origin`, a date variable acting as the time zero (e.g. the date of enrollment)
+
+``` r
+edc_swimmerplot()
+edc_swimmerplot(group="enrolres$arm")
+edc_swimmerplot(origin="enrolres$enroldt")
+```
+
+This outputs a `plotly` interactive graph where you can select the dates of interest and zoom in with your mouse.
+
+![](man/figures/swimmerplot.png)
+
+Note that any modification made after running `read_trialmaster()` is taken into account. For instance, mutating a column with `as.Date()` in one of the tables will add a new group in the plot.
