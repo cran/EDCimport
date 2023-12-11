@@ -11,11 +11,20 @@ filename_bad = test_path("CRF_Dan_Export.zip")
 
 test_that("Read an archive", {
   clean_cache()
-  
+  edc_options(edc_lookup_overwrite_warn=TRUE, .local=TRUE)
   w = read_trialmaster(filename) %>% 
     expect_classed_conditions(message_class="read_tm_zip")
-  w = read_trialmaster(filename) %>% 
-    expect_classed_conditions(message_class="read_tm_cache")
+  w = read_trialmaster(filename, use_cache=TRUE) %>% 
+    expect_classed_conditions(message_class="read_tm_cache", 
+                              warning_class="edc_lookup_overwrite_warn")
+  
+  
+  w = read_trialmaster(filename, use_cache="write") %>% 
+    expect_classed_conditions(message_class="read_tm_zip", 
+                              warning_class="edc_lookup_overwrite_warn")
+  w = read_trialmaster(filename, use_cache="read") %>%
+    expect_classed_conditions(message_class="read_tm_cache", 
+                              warning_class="edc_lookup_overwrite_warn")
   # expect_message(w <- read_trialmaster(filename),
   #                class="read_tm_zip")
   # expect_message(w <- read_trialmaster(filename),
@@ -48,7 +57,7 @@ test_that("Read an archive", {
   #expect formats
   expect_s3_class(site$INCLSITE, "factor")
   expect_equal(as.character(site$INCLSITE), "Yes")
-  expect_equal(dim(.lookup), c(5,5))
+  expect_equal(dim(.lookup), c(5,8))
   clean_cache()
 })
 
@@ -69,5 +78,13 @@ test_that("Read an archive with a bad name", {
   expect_false(is.na(w$date_extraction))
   expect_equal(as.character(w$site$INCLSITE), "Yes")
   clean_cache()
+})
+
+
+test_that("Use cache only if permitted", {
+  w  = read_trialmaster(filename, use_cache="write", verbose=0)
+  w2 = read_trialmaster(filename, use_cache="read", verbose=0) %>% expect_silent()
+  w2 = read_trialmaster(filename, use_cache="read", verbose=0, clean_names_fun=tolower, split_mixed=TRUE) %>% 
+    expect_error(class="read_tm_cache_bad_param")
 })
 

@@ -9,10 +9,12 @@
 #' @noRd
 #' @keywords internal
 #' @importFrom stringr str_replace_all
-file.path2 = function(...){
+file.path2 = function(..., ext=NULL){
   #TODO utilise le package fs?
   fsep = .Platform$file.sep
-  file.path(...) %>% str_replace_all(paste0(fsep, "+"), fsep)
+  rtn = file.path(...) %>% str_replace_all(paste0(fsep, "+"), fsep)
+  if(!is.null(ext)) rtn = paste0(rtn, ext)
+  rtn
 }
 
 
@@ -29,6 +31,17 @@ parse_file_datetime = function(x){
     .[,2] %>%
     strptime(format="%Y_%m_%d_%H_%M") %>% 
     as.POSIXct()
+}
+
+
+#' Change a `try-error` column to a simpler character column of class "edc_error_col"
+#' @noRd
+#' @keywords internal
+flatten_error_columns = function(df){
+  df %>% 
+    mutate(across(where(~inherits(.x, "try-error")), ~{
+      attr(.x, "condition")$message %>% `class<-`("edc_error_col")
+    }))
 }
 
 
@@ -85,6 +98,36 @@ is_invalid_utf8 = function(x){
   !is.na(x) & is.na(iconv(x, "UTF-8", "UTF-8"))
 }
 
+#' @noRd
+#' @keywords internal
+#' @source vctrs::`%0%`
+#' @seealso https://github.com/r-lib/rlang/issues/1583
+`%0%` = function (x, y) {
+  if(length(x) == 0L) y else x
+}
+
+#' @noRd
+#' @keywords internal
+check_invalid_utf8 = function(lookup=getOption("edc_lookup"), warn=FALSE){
+  stopifnot(!is.null(lookup))
+  x = lookup %>% 
+    arrange(desc(nrow)) %>% 
+    unnest(c(names, labels)) %>% 
+    filter(is_invalid_utf8(labels)) %>% 
+    mutate(
+      dataset, names, labels, 
+      valid_labels=iconv(labels, to="UTF-8"),
+      .keep = "none"
+    )
+  
+  bad_utf8 = glue("{x$dataset}${x$names} ({x$valid_labels}) ") %>% set_names("i")
+  if(nrow(x)>0 && isTRUE(warn)){
+    cli_warn(c("Found {length(bad_utf8)} invalid UTF-8 label{?s}:", bad_utf8))
+  }
+  
+  x
+}
+
 
 #' any_of() with case sensitivity
 #' @noRd
@@ -98,7 +141,7 @@ any_of2 = function(x, ignore.case=TRUE, ...){
 #' @keywords internal
 #' @importFrom cli cli_warn
 #' @importFrom dplyr select
-get_data_name = function(df, crfname=getOption("edc_crfname", "crfname")){
+get_data_name = function(df, crfname=getOption("edc_cols_crfname", "crfname")){
   sel = select(df, any_of2(crfname))
   if(!is.null(attr(df, "data_name"))){
     attr(df, "data_name")
@@ -108,4 +151,22 @@ get_data_name = function(df, crfname=getOption("edc_crfname", "crfname")){
   } else {
     NA
   }
+}
+
+#' @noRd
+#' @keywords internal
+copy_label_from = function(x, from){
+  from_labs = map_chr(from, ~attr(.x, "label") %||% NA)
+  mutate(x, across(everything(), ~{
+    attr(.x, "label") = from_labs[dplyr::cur_column()]
+    .x
+  }))
+}
+
+
+#' @noRd
+#' @keywords internal
+set_label = function(x, lab){
+  attr(x, "label") = lab
+  x
 }

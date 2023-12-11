@@ -7,7 +7,7 @@
 extend_lookup(
   lookup,
   ...,
-  key_columns = get_key_cols(),
+  key_columns = get_key_cols(lookup),
   datasets = get_datasets(lookup)
 )
 }
@@ -16,7 +16,7 @@ extend_lookup(
 
 \item{...}{unused}
 
-\item{key_columns}{[\code{list}]\cr the result of \code{\link[=get_key_cols]{get_key_cols()}}, containing the column name used for patient ID and CRF name. Important for \code{split_mixed} and \code{extend_lookup}.}
+\item{key_columns}{[\code{list(n)}]\cr for experts only}
 
 \item{datasets}{[\code{data.frame(n)}]\cr for experts only}
 }
@@ -24,7 +24,7 @@ extend_lookup(
 the lookup, extended
 }
 \description{
-This utility extends the lookup table to include:\cr
+This utility extends the lookup table to include:
 \itemize{
 \item \code{n_id} the number of patients present in the dataset
 \item \code{rows_per_id} the mean number of row per patient

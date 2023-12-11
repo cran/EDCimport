@@ -6,12 +6,13 @@
 \alias{EDCimport-package}
 \title{EDCimport: Import Data from EDC Software}
 \description{
-A convenient toolbox to import data exported from Electronic Data Capture (EDC) software 'TrialMaster' and 'Macro'.
+A convenient toolbox to import data exported from Electronic Data Capture (EDC) software 'TrialMaster'.
 }
 \seealso{
 Useful links:
 \itemize{
   \item \url{https://github.com/DanChaltiel/EDCimport}
+  \item \url{https://danchaltiel.github.io/EDCimport/}
   \item Report bugs at \url{https://github.com/DanChaltiel/EDCimport/issues}
 }
 

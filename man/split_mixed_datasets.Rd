@@ -6,21 +6,21 @@
 \usage{
 split_mixed_datasets(
   datasets = get_datasets(),
-  id,
+  id = get_key_cols()$patient_id,
   ...,
-  ignore_cols = getOption("edc_crfname", "CRFNAME"),
+  ignore_cols = getOption("edc_cols_crfname", "CRFNAME"),
   output_code = FALSE,
   verbose = TRUE
 )
 }
 \arguments{
-\item{datasets}{the datasets to consider. Use the helper \code{\link[=get_datasets]{get_datasets()}} if needed.}
+\item{datasets}{a dataframe or a list of dataframes to split. Default to all the datasets from \code{.lookup}.}
 
-\item{id}{the patient identifier, probably "SUBJID". Should be shared by all datasets.}
+\item{id}{the patient identifier, probably "SUBJID". Should be shared by all datasets. Case-insensitive.}
 
 \item{...}{not used}
 
-\item{ignore_cols}{columns to ignore when considering a table as long. default to}
+\item{ignore_cols}{columns to ignore when considering a table as long. Default to \code{getOption("edc_cols_crfname", "CRFNAME")}. Case-insensitive.}
 
 \item{output_code}{whether to print the code to explicitly write. Can also be a file path.}
 
@@ -39,7 +39,7 @@ names(tm)
 #load_list(tm)
 print(tm$long_mixed) #`val1` and `val2` are long but `val3` is short
 
-mixed_data = split_mixed_datasets(tm, id="SUBJID", verbose=TRUE)
+mixed_data = split_mixed_datasets(tm, id="subjid", verbose=TRUE)
 load_list(mixed_data)
 print(long_mixed_short) 
 print(long_mixed_long) 

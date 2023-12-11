@@ -2,9 +2,9 @@
 % Please edit documentation in R/helpers.R
 \name{get_datasets}
 \alias{get_datasets}
-\title{Retrieve the datasets}
+\title{Retrieve the datasets as a list of data.frames}
 \usage{
-get_datasets(lookup = getOption("edc_lookup", NULL), envir = parent.frame())
+get_datasets(lookup = getOption("edc_lookup"), envir = parent.frame())
 }
 \arguments{
 \item{lookup}{the lookup table}
