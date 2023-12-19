@@ -86,8 +86,7 @@ test_that("find_keyword() works", {
 
 test_that("find_keyword() works with read_trialmaster()", {
   clean_cache()
-  expect_message(w <- read_trialmaster(filename),
-                 class="read_tm_zip")
+  w = read_trialmaster(filename, use_cache=FALSE, verbose=0)
   local_options(edc_lookup=w$.lookup)
   x1=find_keyword("sex")
   expect_equal(x1$names, "SEX")
@@ -101,26 +100,13 @@ test_that("find_keyword() works with read_trialmaster()", {
 
 test_that("Extract zip without password", {
   #This would actually work as well with a random password
-  target = temp_target("test_7z2")
-  extract_7z(filename_nopw, target)
-  expect_true("procformat.sas" %in% dir(target))
-})
-test_that("Extract zip with password", {
   target = temp_target("test_7z1")
-  extract_7z(filename, target, password="0")
+  extract_7z(filename, target)
   expect_true("procformat.sas" %in% dir(target))
 })
 
 
 ## 7z Errors ----
-
-test_that("Extract zip with wrong password", {
-  target = temp_target("test_7zerr")
-  skip_if(is_testing_in_buildpane(), 
-          "Run manually, build pane is behaving wrong: https://stackoverflow.com/q/74308687/3888000")
-  x=extract_7z(filename, target, password="foobar") %>%
-    expect_error(class="edc_7z_bad_password_error")
-})
 
 test_that("7zip not in the path", {
   withr::local_envvar(list(PATH = ""))

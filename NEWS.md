@@ -4,6 +4,14 @@
 EDCimport is a package designed to easily import data from EDC software TrialMaster. Browse code at <https://github.com/DanChaltiel/EDCimport> and read the doc at <https://danchaltiel.github.io/EDCimport/>.
 
 
+# EDCimport 0.4.1
+
+### Bug fixes & Improvements
+
+- Changes in testing environment so that the package can be installed from CRAN despite firewall policies forbidding password-protected archive downloading.
+
+- Fixed a bug where a corrupted XPT file can prevent the whole import to fail.
+
 # EDCimport 0.4.0
 
 ### New features
