@@ -5,6 +5,7 @@
 #'
 #' @return the path to 7zip executable directory
 #' @importFrom cli cli_abort
+#' @importFrom fs dir_exists
 #' 
 #' @noRd
 #' @keywords internal
@@ -12,8 +13,8 @@ get_7z_dir = function(){
   #TODO multiple default depending on OS?
   default = "C:/Program Files/7-Zip/"
   path_7zip = getOption("path_7zip", default)
-  #TODO dir.exists is weak af, better check the executable. But what about linux and macos?
-  if(!dir.exists(path_7zip)){
+  #TODO dir_exists is weak af, better check the executable. But what about linux and macos?
+  if(!dir_exists(path_7zip)){
     cli_abort(c("Path {.val {path_7zip}} does not lead to 7-Zip.", 
                 x="Try to add 7-Zip to the PATH environment variable.", 
                 x='Otherwise, use {.code options(path_7zip="path/to/7zip")} to change the', 
@@ -46,15 +47,16 @@ get_7z_dir = function(){
 #' @return the success/error message. Mainly used for its side effect of extracting the archive.
 #' @seealso https://info.nrao.edu/computing/guide/file-access-and-archiving/7zip/7z-7za-command-line-guide#section-17
 #' @importFrom cli cli_abort cli_warn
+#' @importFrom fs dir_exists file_exists
 #' @importFrom glue glue
 #' @importFrom stringr str_detect
 #' @noRd
 #' @keywords internal
 extract_7z = function(archive, target_dir, password=NULL, path_7zip=NULL){
-  if(!file.exists(archive)){
+  if(!file_exists(archive)){
     cli_abort("Archive file {.val {archive}} does not exist.")
   }
-  if(!dir.exists(target_dir)){
+  if(!dir_exists(target_dir)){
     cli_abort("Target directory {.val {target_dir}} does not exist.")
   }
   cur_path = Sys.getenv("PATH")
@@ -72,12 +74,6 @@ extract_7z = function(archive, target_dir, password=NULL, path_7zip=NULL){
     cli_abort(msg, class="edc_7z_cmd_error")
   }
   
-  # browser()
-  # pwc = if(is.null(password)) "" else password
-  # msg = archive::archive_extract(archive, dir=target_dir, password=pwc)
-  # TODO trycatch pour mauvais mot de passe
-  # return(msg[1])
-  
   status = attr(msg, "status")
   if(!nzchar(msg[1])) msg=msg[-1]
   msg = paste(msg, sep="\n")
@@ -88,13 +84,14 @@ extract_7z = function(archive, target_dir, password=NULL, path_7zip=NULL){
   #                              "7"="Command line error",
   #                              "8"="Not enough memory for operation",
   #                              "255"="User stopped the process")
-  if((!is.null(status) && status!=0)){
+  if(!is.null(status) && status!=0){
     if(status==1){
       cli_warn(msg, class="edc_7z_warn")
     } else {
-      if(any(str_detect(tolower(msg), "wrong password"))){
+      if(any(str_detect(tolower(msg), "password"))){
         cli_abort(c("Wrong password, archive could not be extracted.",
-                    i="Did you forget to run {.code options(trialmaster_pw=xxx)}?"), 
+                    i="Did you forget the {.code read_trialmaster(pw=xxx)} 
+                    argument or the option {.code options(trialmaster_pw=xxx)}?"), 
                   class="edc_7z_bad_password_error")
       }
       cli_abort(msg, class="edc_7z_error")

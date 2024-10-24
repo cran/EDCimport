@@ -5,9 +5,9 @@
 \title{Swimmer plot of all dates columns}
 \usage{
 edc_swimmerplot(
-  .lookup = getOption("edc_lookup"),
+  .lookup = edc_lookup(),
   ...,
-  id = get_key_cols()$patient_id,
+  id = get_subjid_cols(),
   group = NULL,
   origin = NULL,
   id_lim = NULL,
@@ -18,7 +18,7 @@ edc_swimmerplot(
 )
 }
 \arguments{
-\item{.lookup}{the lookup table, default to \code{getOption("edc_lookup")}}
+\item{.lookup}{the lookup table, default to \code{edc_lookup()}}
 
 \item{...}{not used}
 
@@ -54,6 +54,6 @@ p2 = edc_swimmerplot(.lookup, origin="db0$date_naissance", time_unit="weeks",
 p3 = edc_swimmerplot(.lookup, group="db0$group", aes_color="label")
 \dontrun{
 #save the plotly plot as HTML to share it
-htmlwidgets::saveWidget(p, "edc_swimmerplot.html", selfcontained=TRUE)
+save_plotly(p, "edc_swimmerplot.html")
 }
 }

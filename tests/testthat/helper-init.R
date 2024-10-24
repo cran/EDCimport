@@ -1,6 +1,7 @@
 Sys.setenv(LANGUAGE = "en")
 Sys.setenv(TZ="Europe/Paris")
 
+Sys.setenv("TESTTHAT_CPUS" = 5)
 
 options(
   encoding="UTF-8",
@@ -16,20 +17,38 @@ options(
   tidyverse.quiet=TRUE,
   tidyselect_verbosity ="verbose",#quiet or verbose
   lifecycle_verbosity="warning", #NULL, "quiet", "warning" or "error"
+  rlang_backtrace_on_error = "full",
   testthat.progress.max_fails = 50
 )
 
+if(is_testing()){
+  options(
+    tibble.print_max = Inf,
+    tibble.max_extra_cols = 0
+  )
+} else {
+  options(
+    tibble.print_max = NULL,
+    tibble.max_extra_cols = NULL
+  )
+}
+
+# globalCallingHandlers(NULL)
 # rlang::global_entrace()
 
+library(fs, warn.conflicts=FALSE)
+library(usethis, warn.conflicts=FALSE)
 library(rlang, warn.conflicts=FALSE)
+library(cli, warn.conflicts=FALSE)
+library(dplyr, warn.conflicts=FALSE)
+library(purrr, warn.conflicts=FALSE)
+# library(tidyverse, warn.conflicts=FALSE)
 
 
-edc_options(
-  # trialmaster_pw="0", 
-  edc_lookup_overwrite_warn=FALSE
-)
-
-# getOption("trialmaster_pw")
+# edc_options(
+#   # trialmaster_pw="0", 
+#   edc_lookup_overwrite_warn=FALSE
+# )
 
 # cachename="trialmaster_export_2022-08-25 15h16.rds"
 # filename="CRF_Dan_Export_SAS_XPORT_2022_08_25_15_16.zip"
@@ -58,7 +77,8 @@ filename_bad = test_path("CRF_Dan_Export.zip")
 
 clean_cache = function(){
   if(file.exists(cachename)) file.remove(cachename)
-  options(edc_lookup=NULL)
+  if(file.exists(cachename)) stop("ERROR")
+  invisible(TRUE)
 }
 v=utils::View
 
@@ -71,11 +91,17 @@ snapshot_review_bg = function(...){
 }
 
 temp_target = function(name){
-  target = file.path2(tempdir(), "name")
+  target = path_temp(name)
   unlink(target, recursive=TRUE)
-  dir.create(target, showWarnings=FALSE)
+  dir_create(target)
   target
 }
+
+compare2 = function(x, y){
+  f = get("compare", envir = asNamespace("waldo")) #avoir check error
+  f(x, y, x_arg=caller_arg(x), y_arg=caller_arg(y))
+}
+
 
 is_testing_in_buildpane = function(){
   # Sys.getenv("RSTUDIO_CHILD_PROCESS_PANE") =="build"
@@ -89,6 +115,10 @@ is_testing_in_buildpane = function(){
   str_ends(getwd(), "testthat/?")
 }
 
+plot_data = function(p) p$data
+
+#' @examples
+#' warn("hello", class="foobar") %>% expect_classed_conditions(warning_class="foo")
 expect_classed_conditions = function(expr, message_class=NULL, warning_class=NULL, error_class=NULL){
   dummy = c("rlang_message", "message", "rlang_warning", "warning", "rlang_error", "error", "condition")
   ms = list()
@@ -112,8 +142,8 @@ expect_classed_conditions = function(expr, message_class=NULL, warning_class=NUL
   
   f = function(cond_list, cond_class){
     cl = map(cond_list, class) %>% purrr::flatten_chr()
-    missing = setdiff(cl, cond_class) %>% setdiff(dummy)
-    extra = setdiff(cond_class, cl) %>% setdiff(dummy)
+    missing = setdiff(cond_class, cl) %>% setdiff(dummy)
+    extra = setdiff(cl, cond_class) %>% setdiff(dummy)
     if(length(missing)>0 || length(extra)>0){
       cli_abort(c("{.arg {caller_arg(cond_class)}} is not matching thrown conditions:",
                   i="Missing expected classes: {.val {missing}}",
@@ -124,6 +154,7 @@ expect_classed_conditions = function(expr, message_class=NULL, warning_class=NUL
   f(es, error_class)
   f(ws, warning_class)
   f(ms, message_class)
+  expect_true(TRUE)
   x
 }
 
@@ -151,12 +182,12 @@ tryCatch2 = function(expr){
   x = c(errors, warnings, messages) %>% unique()
   attr(rtn, "overview") = tibble(type = map_chr(x, ~ifelse(inherits(.x, 
                                                                     "error"), "Error", ifelse(inherits(.x, "warning"), "Warning", 
-                                                                                              "Message"))), class = map_chr(x, ~class(.x) %>% glue_collapse("/")), 
+                                                                                              "Message"))), class = map_chr(x, ~class(.x) %>% glue::glue_collapse("/")), 
                                  message = map_chr(x, ~conditionMessage(.x)))
   rtn
 }
 
-
-clean_cache()
-cli::cli_inform(c(v="Initializer {.file helper-init_dataset.R} loaded: 
-                     is_testing={is_testing()}, is_parallel={is_parallel()}"))
+# clean_cache()
+cli::cli_inform(c(v="Initializer {.file helper-init.R} loaded at {.path {getwd()}}",
+                  i="is_testing={.val {is_testing()}}, is_checking={.val {is_checking()}}, 
+                  is_parallel={.val {is_parallel()}}"))

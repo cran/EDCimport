@@ -10,15 +10,19 @@
 #' @param trialmaster_pw the password of the trialmaster zip archive. For instance, you can use `edc_options(trialmaster_pw="my_pwd")` in the console once per session, so that you don't have to write the password in clear in your R code
 #' @param path_7zip the path to the 7zip executable. Default to `"C:/Program Files/7-Zip/"`.
 #' @param edc_lookup **(Internal)** a reference to the lookup table (usually `.lookup`). Should usually not be changed manually.
-#' @param edc_subjid_ref **used in [check_subjid]** the vector of the reference subject IDs. You should usually write `edc_options(edc_subjid_ref=enrolres$subjid)`.
+#' @param edc_subjid_ref **used in [edc_warn_patient_diffs]** the vector of the reference subject IDs. You should usually write `edc_options(edc_subjid_ref=enrolres$subjid)`.
 #' @param edc_plotly **used in [edc_swimmerplot]** whether to use plotly to visualize the plot.
-#' @param edc_cols_id,edc_cols_crfname **used in [get_key_cols]** the name of the columns holding the subject id (default to `c("ptno", "subjid")`) and the CRF form name (default to `c("crfname")`). It is case-insensitive.
+#' @param edc_fct_yesno **used in [fct_yesno]** list of values to be considered as Yes/No values. Defaults to `get_yesno_lvl()`.
+#' @param edc_cols_subjid,edc_cols_meta **used in [get_key_cols]** the name of the columns holding the subject id (default to `c("ptno", "subjid")`) and the CRF form name (default to `c("crfname")`). It is case-insensitive.
+#' @param edc_cols_id,edc_cols_crfname deprecated
+#' @param edc_warn_max_subjid The max number of subject IDs to show in [edc_data_warn]
+#' @param edc_meta_cols_pct The minimal proportion of datasets a column has to reach to be considered "meta"
 #' @param edc_read_verbose,edc_correction_verbose,edc_get_key_cols_verbose the verbosity of the output of functions [read_trialmaster] and [read_tm_all_xpt], [manual_correction], and [get_key_cols]. For example, set `edc_options(edc_read_verbose=0)` to silence the first 2.
 #' @param edc_lookup_overwrite_warn default to TRUE. Whether there should be warning when overwriting `.lookup` (like when reading 2 databases successively)
 #' @param .local  if TRUE, the effect will only apply to the local frame (internally using `rlang::local_options()`)
 #'
 #' @return Nothing, called for its side effects
-#' @importFrom rlang caller_env local_options
+#' @importFrom rlang caller_env check_dots_empty have_name
 #' @export
 edc_options = function(
     ...,
@@ -27,20 +31,25 @@ edc_options = function(
     edc_lookup,
     edc_subjid_ref,
     edc_plotly,
+    edc_fct_yesno, 
+    edc_cols_subjid, edc_cols_meta,
     edc_cols_id, edc_cols_crfname,
+    edc_meta_cols_pct, 
+    edc_warn_max_subjid, 
     edc_read_verbose, edc_correction_verbose, edc_get_key_cols_verbose,
     edc_lookup_overwrite_warn,
     .local=FALSE){
-  rlang::check_dots_empty()
-  argg = as.list(match.call()) %>% discard(is.name)
+  check_dots_empty()
   
+  argg = as.list(match.call())
+  argg = argg[have_name(argg)]
   
   if(.local){
     argg = c(argg, .frame = caller_env())
-    do.call(local_options, argg)
+    do.call(rlang::local_options, argg, envir=parent.frame())
   }
   else {
-    do.call(options, argg)
+    do.call(options, argg, envir=parent.frame())
   }
   
   invisible()
@@ -69,6 +78,7 @@ edc_peek_options = function(keep_null=FALSE){
 #'
 #' @return Nothing, called for its side effects
 #' @importFrom cli cli_inform
+#' @importFrom dplyr setdiff
 #' @importFrom purrr map
 #' @importFrom rlang set_names
 #' @export
@@ -83,6 +93,8 @@ edc_reset_options = function(except=c("edc_lookup", "trialmaster_pw", "path_7zip
 }
 
 
+#' @importFrom dplyr setdiff
+#' @importFrom purrr keep map
 #' @importFrom stringr str_extract str_extract_all str_remove_all str_subset
 #' @noRd
 #' @keywords internal

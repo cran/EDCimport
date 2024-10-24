@@ -1,4 +1,72 @@
 
+
+#' Identify if a dataframe has a long or a wide format
+#' 
+#' A dataset is either in the wide format or in the long format ([link](https://towardsdatascience.com/long-and-wide-formats-in-data-explained-e48d7c9a06cb)). 
+#' This function identifies the format of a dataframe with respect to a subject ID. 
+#' If a dataframe has some wide and long columns, it is considered "mixed".
+#' 
+#'
+#' @param df a dataframe
+#' @param id the identifying subject ID
+#' @param ... not used
+#' @param ignore_cols columns to ignore. Usually meta columns (see [get_meta_cols]).
+#' @param na_rm whether to consider missing values
+#' @param warn whether to warn if ID is not found
+#'
+#' @return a string value in `c("wide", "long", "mixed)`
+#' @export
+#' 
+#' @examples
+#' tm = edc_example_mixed()
+#' sapply(tm, table_format, warn=FALSE) 
+table_format = function(df, id=get_subjid_cols(), ..., 
+                        ignore_cols=get_meta_cols(0.95), 
+                        na_rm=FALSE,
+                        warn=TRUE){
+  mean_nval = .table_format(df=df, id=id, ignore_cols=ignore_cols, na_rm=na_rm, warn=warn)
+  if(is.null(mean_nval)) return(NULL)
+  if(all(mean_nval==1)) return("wide")
+  if(all(mean_nval>1)) return("long")
+  return("mixed")
+}
+
+
+#' @noRd
+#' @keywords internal
+#' @importFrom cli cli_abort cli_warn
+#' @importFrom dplyr across select summarise
+#' @importFrom purrr map_dbl
+#' @importFrom rlang check_dots_empty
+#' @importFrom tidyselect everything
+.table_format = function(df, id=get_subjid_cols(), ..., 
+                         ignore_cols=get_meta_cols(0.95), 
+                         na_rm=FALSE,
+                         warn=TRUE){
+  check_dots_empty()
+  # .x = df
+  if(!is.data.frame(df)) return(NULL)
+  if(nrow(df)==0 || ncol(df)==0) return(NULL)
+  
+  if(!any(tolower(id) %in% tolower(names(df)))){
+    if(isTRUE(warn)){
+      cli_warn("{.val {id}} was not found in {.arg df}. Returning {.val NULL}")
+    }
+    return(NULL)
+  }
+  f = if(isTRUE(na_rm)) na.omit else identity
+  mean_nval = df %>% 
+    select(subjid=any_of2(id), everything(), -any_of2(ignore_cols)) %>% 
+    summarise(across(everything(), ~length(unique(f(.x)))), 
+              .by=subjid) %>% 
+    select(-subjid) %>% 
+    map_dbl(mean)
+  
+  if(any(is.na(mean_nval))) cli_abort("This should not happen, code 263467")
+  mean_nval
+}
+
+
 #' Split mixed datasets
 #' 
 #' Split mixed tables, i.e. tables that hold both long data (N values per patient) and short data (one value per patient, duplicated on N lines), into one long table and one short table.
@@ -12,6 +80,14 @@
 #'
 #' @return a list of the new long and short tables. Use [load_list()] to load them into the global environment.
 #' @export
+#' @importFrom cli cli_bullets cli_warn
+#' @importFrom dplyr across group_by select summarise summarise_all ungroup
+#' @importFrom glue glue
+#' @importFrom purrr discard discard_at imap keep list_flatten map_chr
+#' @importFrom rlang check_dots_empty
+#' @importFrom tibble lst
+#' @importFrom tidyselect all_of everything
+#' @importFrom utils head
 #'
 #' @examples
 #' #tm = read_trialmaster("filename.zip", pw="xx")
@@ -30,33 +106,34 @@
 #' filename = tempfile("mixed_code", fileext=".R")
 #' split_mixed_datasets(tm, id="SUBJID", output_code=filename)
 #' readLines(filename)
-#' @importFrom cli cli_bullets
-#' @importFrom dplyr across group_by select summarise summarise_all ungroup
-#' @importFrom glue glue
-#' @importFrom purrr discard imap keep list_flatten map_chr
-#' @importFrom rlang check_dots_empty
-#' @importFrom tibble lst
-#' @importFrom tidyselect all_of everything
-split_mixed_datasets = function(datasets=get_datasets(), id=get_key_cols()$patient_id, ..., 
-                                ignore_cols=getOption("edc_cols_crfname", "CRFNAME"), 
+split_mixed_datasets = function(datasets=get_datasets(), id=get_subjid_cols(), ..., 
+                                ignore_cols=get_meta_cols(0.95), 
                                 output_code=FALSE,
                                 verbose=TRUE){
   check_dots_empty()
   if(is.data.frame(datasets)) datasets = list(datasets)
-  datasets = datasets %>% keep(~is.data.frame(.x)) %>% keep_at(~.x!=".lookup")
+  override_ignore_cols = options("edc_override_ignore_cols")[[1]]
+  if(!is.null(override_ignore_cols)) ignore_cols = override_ignore_cols
+  datasets = datasets %>% keep(is.data.frame) %>% discard_at(".lookup")
   
-  dataset_mean_nval = datasets %>% 
-    imap(~{
-      if(!any(tolower(id) %in% tolower(names(.x)))) return(NULL)
-      if(nrow(.x)==0 || ncol(.x)==0) return(NULL)
-      .x %>% 
-        group_by(across(any_of2(id))) %>% 
-        summarise_all(~length(unique(.x))) %>% 
-        ungroup() %>% 
-        select(-any_of2(id)) %>% 
-        summarise_all(~mean(.x)) %>%
+  dataset_mean_nval = datasets %>%
+    imap( ~ {
+      if (!any(tolower(id) %in% tolower(names(.x))))
+        return(NULL)
+      if (nrow(.x) == 0 || ncol(.x) == 0)
+        return(NULL)
+      .x %>%
+        group_by(across(any_of2(id))) %>%
+        summarise_all( ~ length(unique(.x))) %>%
+        ungroup() %>%
+        select(-any_of2(id)) %>%
+        summarise_all( ~ mean(.x)) %>%
         unlist()
     })
+  
+  #TODO pas possible car il faut laisser les ignore_cols dans les tables wide!
+  # dataset_mean_nval = datasets %>% 
+  #   map(~.table_format(df=.x, id=id, ignore_cols=ignore_cols, na_rm=F, warn=warn))
   
   #TODO option pour faire plutôt length(unique(na.omit(.x))) ?
   #si c'est manquant sur une ligne et pas sur une autre on 
@@ -173,7 +250,6 @@ split_mixed_datasets = function(datasets=get_datasets(), id=get_key_cols()$patie
 #' @return a vector of length 1
 #' @export
 #' @importFrom cli cli_warn
-#' @importFrom labelled var_label
 #' @importFrom stats na.omit
 #'
 #' @examples
@@ -192,7 +268,7 @@ unify = function(x){
     cli_warn(c("Unifying multiple values in {.val {caller_arg(x)}}, returning the first one ({.val {rtn})}", 
                i="Unique values: {.val {unique(na.omit(x))}}"))
   }
-  rtn_label = var_label(x)
+  rtn_label = get_label(x)
   if(!is.null(rtn_label)) attr(rtn, "label") = rtn_label
   rtn
 }

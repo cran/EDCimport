@@ -7,7 +7,7 @@
 #' 
 #' Join all tables from `.lookup$dataset` on `id` 
 #'
-#' @param .lookup the lookup table, default to `getOption("edc_lookup")`
+#' @param .lookup the lookup table, default to `edc_lookup()`
 #' @param id the patient identifier. Will be coerced as numeric.
 #' @param group a grouping variable, given as "dataset$column"
 #' @param origin a variable to consider as time 0, given as "dataset$column"
@@ -31,21 +31,20 @@
 #' p3 = edc_swimmerplot(.lookup, group="db0$group", aes_color="label")
 #' \dontrun{
 #' #save the plotly plot as HTML to share it
-#' htmlwidgets::saveWidget(p, "edc_swimmerplot.html", selfcontained=TRUE)
+#' save_plotly(p, "edc_swimmerplot.html")
 #' }
 #' @importFrom cli cli_abort cli_warn
-#' @importFrom dplyr between left_join mutate rename select slice
+#' @importFrom dplyr between filter left_join mutate rename select slice
 #' @importFrom forcats as_factor
 #' @importFrom ggplot2 aes facet_wrap geom_line geom_point ggplot labs
 #' @importFrom glue glue
-#' @importFrom labelled var_label
 #' @importFrom purrr discard imap list_rbind map
 #' @importFrom rlang check_dots_empty check_installed is_installed set_names sym
-#' @importFrom stringr str_detect str_ends str_remove
+#' @importFrom stringr str_detect str_ends str_remove str_replace_all
 #' @importFrom tidyr pivot_longer
-#' @importFrom tidyselect where
-edc_swimmerplot = function(.lookup=getOption("edc_lookup"), ..., 
-                           id=get_key_cols()$patient_id, 
+#' @importFrom tidyselect matches where
+edc_swimmerplot = function(.lookup=edc_lookup(), ..., 
+                           id=get_subjid_cols(), 
                            group=NULL, origin=NULL, 
                            id_lim=NULL,
                            exclude=NULL,
@@ -95,7 +94,7 @@ edc_swimmerplot = function(.lookup=getOption("edc_lookup"), ...,
       .x %>% 
         pivot_longer(-id) %>% 
         mutate(
-          label=unlist(var_label(.x)[name]) %||% name,
+          label=unlist(get_label(.x)[name]) %||% name,
           dataset=.y,
           variable=paste0(toupper(dataset), " - ", toupper(name))
         )
@@ -174,15 +173,47 @@ edc_swimmerplot = function(.lookup=getOption("edc_lookup"), ...,
 }
 
 
+# Helper ------------------------------------------------------------------
+
+#' Save a plotly to an HTML file
+#'
+#' @param p a plot object (`plotly` or `ggplot`)
+#' @param file a file path to save the HTML file
+#' @param ... passed on to [htmlwidgets::saveWidget]
+#'
+#' @export
+#' @return nothing, used for side effect
+#'
+#' @examples
+#' \dontrun{
+#' tm = edc_example_plot()
+#' p = edc_swimmerplot(tm$.lookup, id_lim=c(5,45))
+#' save_plotly(p, "graph/swimplots/edc_swimmerplot.html", title="My Swimmerplot")
+#' }
+#' @importFrom fs dir_create path_dir
+#' @importFrom rlang check_installed
+save_plotly = function(p, file, ...){
+  check_installed("plotly", reason="for `save_plotly()` to work.")
+  check_installed("htmlwidgets", reason="for `save_plotly()` to work.")
+  if(inherits(p, "ggplot")) p = plotly::ggplotly(p)
+  dir_create(path_dir(file), recurse=TRUE)
+  wd = setwd(path_dir(file))
+  on.exit(setwd(wd))
+  htmlwidgets::saveWidget(p, file=basename(file), ...)
+}
+
+
+# Utils -------------------------------------------------------------------
 
 #' @importFrom cli cli_abort
-#' @importFrom dplyr select
+#' @importFrom dplyr rename select
 #' @importFrom rlang caller_arg
 #' @importFrom stringr str_detect str_split
+#' @importFrom tidyselect matches
 #' @noRd
 #' @keywords internal
 parse_var = function(input, id, env){
-  input_name = rlang::caller_arg(input)
+  input_name = caller_arg(input)
   
   if(!str_detect(input, "^.*\\$.*$")){
     cli_abort(c(x="{.arg {input_name}} is not in the form `dataset$column`.", 

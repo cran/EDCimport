@@ -11,8 +11,13 @@ edc_options(
   edc_lookup,
   edc_subjid_ref,
   edc_plotly,
+  edc_fct_yesno,
+  edc_cols_subjid,
+  edc_cols_meta,
   edc_cols_id,
   edc_cols_crfname,
+  edc_meta_cols_pct,
+  edc_warn_max_subjid,
   edc_read_verbose,
   edc_correction_verbose,
   edc_get_key_cols_verbose,
@@ -29,11 +34,19 @@ edc_options(
 
 \item{edc_lookup}{\strong{(Internal)} a reference to the lookup table (usually \code{.lookup}). Should usually not be changed manually.}
 
-\item{edc_subjid_ref}{\strong{used in \link{check_subjid}} the vector of the reference subject IDs. You should usually write \code{edc_options(edc_subjid_ref=enrolres$subjid)}.}
+\item{edc_subjid_ref}{\strong{used in \link{edc_warn_patient_diffs}} the vector of the reference subject IDs. You should usually write \code{edc_options(edc_subjid_ref=enrolres$subjid)}.}
 
 \item{edc_plotly}{\strong{used in \link{edc_swimmerplot}} whether to use plotly to visualize the plot.}
 
-\item{edc_cols_id, edc_cols_crfname}{\strong{used in \link{get_key_cols}} the name of the columns holding the subject id (default to \code{c("ptno", "subjid")}) and the CRF form name (default to \code{c("crfname")}). It is case-insensitive.}
+\item{edc_fct_yesno}{\strong{used in \link{fct_yesno}} list of values to be considered as Yes/No values. Defaults to \code{get_yesno_lvl()}.}
+
+\item{edc_cols_subjid, edc_cols_meta}{\strong{used in \link{get_key_cols}} the name of the columns holding the subject id (default to \code{c("ptno", "subjid")}) and the CRF form name (default to \code{c("crfname")}). It is case-insensitive.}
+
+\item{edc_cols_id, edc_cols_crfname}{deprecated}
+
+\item{edc_meta_cols_pct}{The minimal proportion of datasets a column has to reach to be considered "meta"}
+
+\item{edc_warn_max_subjid}{The max number of subject IDs to show in \link{edc_data_warn}}
 
 \item{edc_read_verbose, edc_correction_verbose, edc_get_key_cols_verbose}{the verbosity of the output of functions \link{read_trialmaster} and \link{read_tm_all_xpt}, \link{manual_correction}, and \link{get_key_cols}. For example, set \code{edc_options(edc_read_verbose=0)} to silence the first 2.}
 

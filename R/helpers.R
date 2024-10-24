@@ -29,17 +29,18 @@
 #' find_keyword("\\(") #you need to escape special characters
 #' }
 #' @importFrom cli cli_warn
-#' @importFrom dplyr filter mutate pull select
-#' @importFrom purrr map2_chr
-#' @importFrom stringr str_detect
+#' @importFrom dplyr any_of filter mutate pull select
+#' @importFrom purrr map2_chr map2_dbl
+#' @importFrom stringr str_detect str_trim
 #' @importFrom tidyr unite unnest
-find_keyword = function(keyword, data=getOption("edc_lookup"), ignore_case=TRUE){
-  stopifnot(!is.null(data))
+#' @importFrom tidyselect where
+find_keyword = function(keyword, data=edc_lookup(), ignore_case=TRUE){
   invalid=names2=labels2=x=NULL
   f = if(isTRUE(ignore_case)) tolower else identity
-  keyword = f(keyword)
   f2 = function(x,y) map2_chr(x, y, ~if(.y) {.x} else {f(.x)})
+  keyword = f(str_trim(keyword))
   tmp = data %>% 
+    select(-any_of(c("nrow", "ncol", "n_id", "rows_per_id"))) %>% 
     unnest(c(names, labels)) %>% 
     mutate(
       labels=unlist(labels), 
@@ -48,9 +49,16 @@ find_keyword = function(keyword, data=getOption("edc_lookup"), ignore_case=TRUE)
       labels2=f2(labels, invalid),
     ) %>% 
     filter(str_detect(names2, keyword) | str_detect(labels2, keyword)) %>% 
-    select(-names2, -labels2)
+    select(-names2, -labels2) %>% 
+    mutate(prop_na = map2_dbl(dataset, names, ~{
+      if(!exists(.x, envir=globalenv())) return(NA)
+      x=get(.x, envir=globalenv())[[.y]]
+      mean(is.na(x))
+    })) %>% 
+    select(-where(~all(is.na(.x))))
+  if(nrow(tmp)==0) return(NULL)
   
-  if(isTRUE(ignore_case) && any(tmp$invalid)){
+  if(isTRUE(ignore_case) && any(tmp[["invalid"]])){
     cols = tmp %>% filter(invalid) %>% unite("x", c("dataset", "names"), sep="$") %>% pull(x)
     cli_warn(c("Some columns have labels containing non UTF8 characters. {.arg ignore_case} has been ignored for these.", 
                i="Columns: {.code {cols}}.",
@@ -64,79 +72,316 @@ find_keyword = function(keyword, data=getOption("edc_lookup"), ignore_case=TRUE)
 
 
 
-
-#' Check the completion of the subject ID column
-#' 
-#' Compare a subject ID vector to the study's reference subject ID (usually something like `enrolres$subjid`).
+#' Format factor levels as Yes/No
 #'
-#' @param x the subject ID column to check
-#' @param ref the reference for subject ID. Should usually be set through `options(edc_subjid_ref=xxx)`. See example.
+#' Format factor levels as arbitrary values of Yes/No (with Yes always first) while **leaving untouched** all vectors that contain other information. 
 #'
-#' @return nothing, called for warnings
+#' @param x a vector of any type/class.
+#' @param input list of values to be considered as "yes" and "no".
+#' @param output the output factor levels.
+#' @param strict whether to match the input strictly or use [stringr::str_detect] to find them.
+#' @param mutate_character whether to turn characters into factor.
+#' @param fail whether to fail if some levels cannot be recoded to yes/no.
+#'
+#' @return a factor, or `x` untouched.
 #' @export
+#' @importFrom cli cli_abort
+#' @importFrom dplyr case_when
+#' @importFrom stringr str_detect
 #'
-#' @examples
-#' tm = edc_example()
-#' load_list(tm)
-#' options(edc_subjid_ref=db0$SUBJID)
-#' #usually, you set something like:
-#' #options(edc_subjid_ref=enrolres$subjid)
-#' check_subjid(db1$SUBJID)
-#' check_subjid(db1$SUBJID %>% setdiff(2))
-#' check_subjid(c(db1$SUBJID, 99))
-check_subjid = function(x, ref=getOption("edc_subjid_ref")){
-  if(is.null(ref)){
-    cli_abort("{.arg ref} cannot be NULL in {.fun check_subjid}. See {.help EDCimport::check_subjid} to see how to set it.")
-  }
-  ref = sort(unique(ref))
-  m = setdiff(ref, x) %>% sort()
-  if(length(m)>0) cli_warn("Missing subject ID in {.arg {rlang::caller_arg(x)}}: {.val {m}}", 
-                           class="edc_check_subjid_miss")
-  m = setdiff(x, ref) %>% sort()
-  if(length(m)>0) cli_warn("Additional subject ID {.arg {rlang::caller_arg(x)}}: {.val {m}}", 
-                           class="edc_check_subjid_additional")
-  invisible(NULL)
-}
-
-#' Assert that a dataset has one row per patient
+#' @examples 
 #' 
-#' Check that there is no duplicate on the column holding patient ID in a pipeable style. \cr
-#' Mostly useful after joining two datasets.
-#'
-#' @param df the dataset
-#' @param id_col *(optional)* the name of the columns holding patient ID
-#'
-#' @return the `df` dataset, unchanged
-#' @importFrom cli qty
-#' @importFrom rlang current_env
-#' @importFrom utils head
-#' @export
-#'
-#' @examples
-#' #without duplicate => no error, continue the pipeline
-#' tibble(subjid=c(1:10)) %>% assert_no_duplicate() %>% nrow()
+#' fct_yesno(c("No", "Yes")) #levels are in order
 #' 
-#' #with duplicate => throws an error
-#' #tibble(subjid=c(1:10, 1:2)) %>% assert_no_duplicate() %>% nrow()
-assert_no_duplicate = function(df, id_col=get_key_cols()){
-  if(is.list(id_col)) id_col = id_col$patient_id
-  env = current_env()
-  x = df %>% select(any_of2(id_col))
-  if(ncol(x)==0){
-    cli_abort("Cannot assert the absence of duplicates: no ID column ({.val {id_col}}).", 
-              call=env, class="edcimport_assert_no_duplicate_no_col")
+#' set.seed(42)
+#' N=6
+#' x = tibble(
+#'   a=sample(c("Yes", "No"), size=N, replace=TRUE),
+#'   b=sample(c("Oui", "Non"), size=N, replace=TRUE),
+#'   c=sample(0:1, size=N, replace=TRUE),
+#'   d=sample(c(TRUE, FALSE), size=N, replace=TRUE),
+#'   e=sample(c("1-Yes", "0-No"), size=N, replace=TRUE),
+#'   
+#'   y=sample(c("aaa", "bbb", "ccc"), size=N, replace=TRUE),
+#'   z=1:N,
+#' )
+#'  
+#' x          
+#' #y and z are left untouched (or throw an error if fail=TRUE)   
+#' sapply(x, fct_yesno, fail=FALSE)
+#' 
+#' # as "1-Yes" is not in `input`, x$e is untouched/fails if strict=TRUE
+#' fct_yesno(x$e)
+#' fct_yesno(x$e, strict=TRUE, fail=FALSE) 
+#' fct_yesno(x$e, output=c("Ja", "Nein"))
+fct_yesno = function(x, 
+                     input=list(yes=c("Yes", "Oui"), no=c("No", "Non")), 
+                     output=c("Yes", "No"),
+                     strict=FALSE,
+                     mutate_character=TRUE, 
+                     fail=TRUE){
+  assert_class(input, "list")
+  assert(setequal(names(input), c("yes", "no")))
+  
+  if (!inherits(x, c("logical", "numeric", "integer", "character", "factor"))) return(x)
+  if (is.character(x) && isFALSE(mutate_character)) return(x)
+  
+  if (missing(input))  input =  getOption("fct_yesno_input", input)
+  if (missing(output)) output = getOption("fct_yesno_input", output)
+  
+  #if logical or numeric AND binary
+  if (all(x %in% c(1, 0, NA))) {
+    return(factor(as.numeric(x), levels=c(1,0), labels=output) %>% copy_label_from(x))
+  } else if(is.numeric(x)){
+    return(x)
   }
   
-  y = x %>% map(duplicated) %>% head(1) #y is scalar
-  if(any(unlist(y))){
-    dups = x[[1]][unlist(y)] %>% unique() %>% sort() 
-    dups = head(dups, 10) #because of https://github.com/r-lib/cli/issues/617
-    cli_abort("Duplicate on column {.val { names(y)}} for {qty(length(dups))} value{?s} {.val {dups}}.", 
-              call=env, class="edcimport_assert_no_duplicate")
+  if (!isFALSE(strict)) {
+    fun = if(strict=="ignore_case")tolower else identity
+    is_yes = fun(x) %in% fun(input$yes)
+    is_no  = fun(x) %in% fun(input$no)
+  } else {
+    is_yes = str_detect(tolower(x), paste(tolower(input$yes), collapse="|"))
+    is_no  = str_detect(tolower(x), paste(tolower(input$no ), collapse="|"))
   }
-  df
+  if (any(is_yes&is_no, na.rm=TRUE)) {
+    v = x[!is.na(x) & is_yes & is_no]
+    cli_abort("Values that are both yes and no: {.val {v}}", 
+              class="fct_yesno_both_error")
+  }
+  yesno = case_when(
+    is.na(x) ~ NA,
+    is_yes ~ TRUE,
+    is_no ~ FALSE,
+    .default=NA
+  )
+  if (any(is.na(x) != is.na(yesno))) {
+    if(isTRUE(fail)){
+      v = x[is.na(x) != is.na(yesno)]
+      cli_abort("Values that cannot be parsed: {.val {unique(sort(v))}}", 
+                class="fct_yesno_unparsed_error")
+    }
+    return(x)
+  }
+  
+  factor(yesno, levels=c(TRUE,FALSE), labels=output) %>% copy_label_from(x)
 }
 
+
+#' Select only distinct columns
+#' 
+#' Select all columns that has only one level for a given grouping scope. 
+#' Useful when dealing with mixed datasets containing both long data and repeated short data.
+#'
+#' @param df a dataframe
+#' @param .by optional grouping columns
+#'
+#' @return `df` with less columns
+#' @export
+#'
+#' @examples
+#' tm = edc_example_ae()
+#' tm$ae %>% names
+#' tm$ae %>% select_distinct() %>% names
+#' tm$ae %>% select_distinct(.by=subjid) %>% names
+#' @importFrom dplyr across distinct n_distinct select summarise
+#' @importFrom tidyselect all_of everything where
+select_distinct = function(df, .by) {
+  a = df %>% 
+    summarise(across(everything(), function(.x) n_distinct(.x, na.rm=TRUE)), 
+              .by={{.by}}) %>% 
+    select(where(~all(.x==1))) %>% 
+    names()
+  
+  df %>% 
+    select({{.by}}, all_of(a)) %>% 
+    distinct() 
+}
+
+
+#' Get a table with the latest date for each patient
+#' 
+#' This function search for date columns in every tables and returns the latest date 
+#' for each patient with the variable it comes from. Useful in survival analysis to get 
+#' the right censoring time.
+#'
+#' @param except the datasets/columns that should not be searched. Example: a scheduled visit for which the patient may have died before attending should not be considered.
+#' @param with_ties in case of tie, whether to return the first `origin` (FALSE) or all the origins that share this tie (TRUE).
+#' @param numeric_id set to FALSE if the patient ID column is not numeric
+#' @param prefer preferred origins in the event of a tie. Usually the followup table.
+#' @param warn_if_future whether to show a warning about dates that are after the extraction date
+#'
+#' @return a dataframe
+#' @export
+#'
+#' @examples
+#' tm = edc_example_plot()
+#' load_list(tm)
+#' lastnews_table()
+#' lastnews_table(except="db3")
+#' lastnews_table(except="db3$date9")
+#' lastnews_table(prefer="db2") 
+#' @importFrom cli cli_abort
+#' @importFrom dplyr arrange filter mutate rowwise select slice_max ungroup
+#' @importFrom purrr discard discard_at imap list_rbind
+#' @importFrom tidyr pivot_longer
+#' @importFrom tidyselect where
+lastnews_table = function(except=NULL, with_ties=FALSE, numeric_id=TRUE, 
+                          prefer=NULL,
+                          warn_if_future=TRUE) {
+  subjid_cols = get_subjid_cols()
+  rtn = get_datasets(envir=parent.frame()) %>% 
+    discard_at(as.character(except)) %>% 
+    imap(~{
+      if(!is.data.frame(.x) || !any(subjid_cols %in% names(.x))) return(NULL)
+      a = .x %>% 
+        select(subjid = any_of2(subjid_cols), where(is.Date)) %>% 
+        mutate(subjid = as.character(subjid))
+      if(ncol(a)<=1) return(NULL) #only subjid
+      a %>% 
+        pivot_longer(-subjid) %>% 
+        filter(!is.na(value)) %>% 
+        mutate(origin_label=unlist(get_label(.x)[name]),
+               dataset=.y)
+    }) %>% 
+    discard(is.null) %>% 
+    list_rbind()  %>% 
+    select(subjid, last_date=value, origin_data=dataset, origin_col=name, origin_label) %>% 
+    mutate(origin = paste0(origin_data, "$", origin_col))
+  if(nrow(rtn)==0){
+    cli_abort("No data with dates could be found, verify your export settings.")
+  }
+  if(numeric_id) {
+    rtn$subjid = as.numeric(rtn$subjid)
+  }
+  
+  rtn = rtn %>% 
+    filter(!origin %in% except) %>% 
+    filter(!origin_data %in% except) %>% 
+    filter(!origin_col %in% except) %>% 
+    slice_max(last_date, by=subjid, with_ties=TRUE) %>% 
+    arrange(order(mixedorder(subjid)))
+  
+  if(!with_ties){
+    rtn = rtn %>% 
+      rowwise() %>%  
+      mutate(prefered = which(prefer %in% c(origin, origin_data, origin_col)) %0% Inf) %>% 
+      ungroup() %>% 
+      arrange((prefered)) %>% 
+      select(-prefered, -origin) %>% 
+      slice_max(last_date, by=subjid, with_ties=FALSE) %>% 
+      arrange(order(mixedorder(subjid)))
+  }
+  
+  if(exists("datetime_extraction")){
+    if(any(rtn$last_date > as.Date(datetime_extraction)) && warn_if_future) {
+      rtn %>% 
+        filter(last_date>as.Date(datetime_extraction)) %>% 
+        edc_data_warn("Date of last news after the extraction date", issue_n=NA)
+    }
+  }
+  
+  rtn
+}
+
+
+#' Shows how many code you wrote
+#'
+#' @param main the main R file, which sources the other ones
+#' @param Rdir the R directory, where sourced R files are located
+#'
+#' @return Nothing
+#' @export
+#' @importFrom cli cli_inform
+#' @importFrom purrr map_dbl
+#' @importFrom rlang set_names
+#' @importFrom stringr str_extract str_subset
+edc_inform_code = function(main="main.R", Rdir="R/"){
+  assert_file_exists(main)
+  sources = readLines(main) %>% 
+    str_subset(Rdir) %>% str_subset("^ *#", negate=TRUE) %>% str_extract('"(.*)"', group=TRUE) %>% 
+    set_names()
+  
+  rslt = sources %>% map_dbl(~readLines(.x) %>% length())
+  
+  cli_inform("Sourcing {length(rslt)} files in {.path {main}} for a total 
+             of {sum(rslt)} lines of code.")
+}
+
+
+#' Save `sessionInfo()` output
+#'
+#' Save `sessionInfo()` output into a text file.
+#'
+#' @param path target path to write the file
+#' @param with_date whether to insert the date before the file extension
+#'
+#' @return nothing
+#' @export
+#' @importFrom fs dir_create path path_dir path_ext path_ext_remove
+#' @importFrom utils capture.output sessionInfo
+#'
+#' @examples
+#' \dontrun{
+#'    save_sessioninfo()
+#' }
+save_sessioninfo = function(path="check/session_info.txt", with_date=TRUE){
+  target = path %>% 
+    path_ext_remove() %>% 
+    paste0("_", today_ymd()) %>% 
+    path(ext=path_ext(path))
+  dir_create(path_dir(target), recurse=TRUE)
+  sessionInfo() %>% capture.output() %>% cat(file=target, sep="\n")
+  invisible(TRUE)
+}
+
+#' Harmonize the subject ID of the database
+#' 
+#' Turns the subject ID columns of all datasets into a factor containing levels for all 
+#' the subjects of the database. Avoid problems when joining tables, and some checks can
+#' be performed on the levels.
+#'
+#' @param datalist a list of dataframes
+#' @param preprocess an optional function to modify the subject ID column, for example `as.numeric()`. See examples.
+#' @param col_subjid the names of the columns holding the subject ID (as character)
+#'
+#' @return datalist, with subject id modified
+#' @export
+#' @importFrom purrr modify
+#'
+#' @examples
+#' db = edc_example()
+#' db$db0 = head(db$db0, 10)
+#' db$db0$SUBJID %>% head()
+#' db = harmonize_subjid(db)
+#' db$db0$SUBJID %>% head()
+#' db = harmonize_subjid(db, preprocess=function(x) paste0("#", x))
+#' db$db0$SUBJID %>% head()
+harmonize_subjid = function(datalist, preprocess=NULL, 
+                            col_subjid=get_subjid_cols()){
+  if(is.null(preprocess)) preprocess = identity
+  assert_class(preprocess, "function")
+  
+  all_subjid = datalist %>% 
+    keep(is.data.frame) %>% 
+    discard_at(".lookup") %>% 
+    map(~select(.x, any_of(col_subjid))) %>% 
+    unlist() %>% 
+    as.character() %>% 
+    preprocess() %>% 
+    unique() %>% 
+    mixedsort()
+  
+  a= datalist %>% 
+    modify(function(df){
+      if(!is.data.frame(df)) return(df)
+      df %>% 
+        mutate(across(any_of(get_subjid_cols()), 
+                      ~factor(preprocess(.x), levels=all_subjid)))
+    })
+  
+  a
+}
 
 
 # Manual correction ---------------------------------------------------------------------------
@@ -146,10 +391,10 @@ assert_no_duplicate = function(df, id_col=get_key_cols()){
 #' 
 #' @description
 #'  
-#' When finding wrong or unexpected values in an exported table, it can be useful to temporarily correct them by hard-coding a value. 
+#' When finding wrong or unexpected values in an exported dataset, it can be useful to temporarily correct them by hard-coding a value. 
 #' However, this manual correction should be undone as soon as the central database is updated with the correction. 
 #' 
-#'  - `manual_correction()` applies a correction in a specific table column location and throws an error if the correction is already in place. This check applies only once per R session so you can source your script without errors.
+#'  - `manual_correction()` applies a correction in a specific dataset column location and throws an error if the correction is already in place. This check applies only once per R session so you can source your script without errors.
 #'  - `reset_manual_correction()` resets all checks. For instance, it is called by [read_trialmaster()].
 #'
 #' @param data,col,rows the rows of a column of a dataframe where the error lies
@@ -158,7 +403,9 @@ assert_no_duplicate = function(df, id_col=get_key_cols()){
 #' @param verbose whether to print informations (once)
 #'
 #' @return Nothing, used for side effects
-#' @importFrom rlang as_name enquo set_names
+#' @importFrom cli cli_abort cli_inform cli_warn
+#' @importFrom glue glue
+#' @importFrom rlang as_name caller_arg enquo set_names
 #' @export
 #'
 #' @examples
@@ -186,7 +433,7 @@ manual_correction = function(data, col, rows, wrong, correct,
                              verbose=getOption("edc_correction_verbose", TRUE)){
   col = as_name(enquo(col))
   stopifnot(is.data.frame(data))
-  data_name = rlang::caller_arg(data)
+  data_name = caller_arg(data)
   
   if(length(rows)!=length(wrong) || length(rows)!=length(correct)){
     cli_abort("{.arg rows} ({length(rows)}), {.arg wrong} ({length(wrong)}), and {.arg correct} ({length(correct)}) should be the same length.")
@@ -226,12 +473,13 @@ manual_correction = function(data, col, rows, wrong, correct,
 #' @name manual_correction
 #' @return NULL
 #' @export
+#' @importFrom purrr map
+#' @importFrom stringr str_starts
 reset_manual_correction = function(){
   x=options()
   x=x[str_starts(names(x), "edc_correction_done_")] %>% map(~NULL)
   options(x)
 }
-
 
 
 # Getters -------------------------------------------------------------------------------------
@@ -246,12 +494,27 @@ reset_manual_correction = function(){
 #'
 #' @return a list of all datasets
 #' @export
-#' @importFrom purrr map
-#' @importFrom rlang set_names
-get_datasets = function(lookup=getOption("edc_lookup"), envir=parent.frame()){
-  lookup$dataset %>% 
-    set_names() %>% 
-    map(~get(.x, envir=envir))
+#' @importFrom cli cli_abort cli_warn
+#' @importFrom purrr keep
+get_datasets = function(lookup=edc_lookup(), envir=parent.frame()){
+  if(is.null(lookup)){
+    cli_abort("lookup cannot be NULL, did you forgot to import your database?")
+  }
+  rtn = lookup$dataset %>% 
+    mget(envir=envir, ifnotfound=list(NULL), mode="list", inherits=TRUE)
+  a = rtn %>% keep(is.null) %>% names()
+  if(length(a) > 5){
+    cli_warn(c("Could not find {length(a)}/{length(rtn)} datasets from the lookup, did you forget to call {.fn load_list} on your import?",
+               i="{.val {a}}"))
+  }
+  
+  rtn
+  # lookup$dataset %>% 
+  #   set_names() %>% 
+  #   map(~{
+  #     x = try(get(.x, envir=envir))
+  #     
+  #   })
 }
 
 
@@ -264,19 +527,25 @@ get_datasets = function(lookup=getOption("edc_lookup"), envir=parent.frame()){
 #' @return a list(2) of characters with names `patient_id` and `crfname`
 #' 
 #' @export
+#' @importFrom cli cli_warn
 #' @importFrom dplyr mutate select
+#' @importFrom lifecycle deprecate_warn
 #' @importFrom purrr map map_chr
+#' @importFrom stats na.omit
 #' @importFrom tibble lst
-get_key_cols = function(lookup=getOption("edc_lookup")){
-  patient_id = getOption("edc_cols_id", c("PTNO", "SUBJID"))
+get_key_cols = function(lookup=edc_lookup()){
+  patient_id = get_subjid_cols()
+  
   crfname = getOption("edc_cols_crfname", "CRFNAME")
+  deprecate_warn("1.0.0", "get_key_cols()")
   if(is.null(lookup)) return(lst(patient_id, crfname))
   
+  f = function(x, y) x[tolower(x) %in% tolower(y)][1] %0% NA 
   rtn = lookup %>% 
     select(dataset, names) %>% 
     mutate(
-      patient_id=map_chr(names, ~.x[tolower(.x) %in% tolower(patient_id)][1] %0% NA), 
-      crfname=map_chr(names, ~.x[tolower(.x) %in% tolower(crfname)][1] %0% NA)
+      patient_id = map_chr(names, ~f(.x, patient_id)), 
+      crfname =    map_chr(names, ~f(.x, crfname))
     )
   
   verbose = getOption("edc_get_key_cols_verbose", FALSE)
@@ -293,12 +562,153 @@ get_key_cols = function(lookup=getOption("edc_lookup")){
              class="edcimport_get_key_cols_missing_crfname")
   }
   
-  rtn %>% 
-    select(patient_id, crfname) %>% 
+  rtn = rtn %>% 
     map(~unique(na.omit(.x)), na.rm=TRUE)
+  
+  if(length(rtn)==1) return(rtn[[1]])
+  rtn
 }
 
 
+#' Get key column names
+#' 
+#' Retrieve names of patient ID and CRF name from the actual names of the datasets, without respect of the case. Default values should be set through options.
+#' 
+#' @section options:
+#' Use `edc_options()` to set default values:
+#' * `edc_cols_subjid` defaults to `c("PTNO", "SUBJID")`  
+#' * `edc_cols_crfname` defaults to `c("CRFNAME")`
+#'
+#' @param lookup the lookup table
+#'
+#' @return a character vector
+#' @export
+#'
+#' @examples
+#' get_subjid_cols()
+#' get_crfname_cols()
+get_subjid_cols = function(lookup=edc_lookup()){
+  subjid_cols=getOption("edc_cols_subjid", c("PTNO", "SUBJID"))
+  .get_key_cols(subjid_cols, id_name="patient", lookup)
+}
+
+#' @rdname get_subjid_cols
+#' @export
+get_crfname_cols = function(lookup=edc_lookup()){
+  crfname_cols=getOption("edc_cols_crfname", "CRFNAME")
+  .get_key_cols(crfname_cols, id_name="CRF", lookup)
+}
+
+#' @noRd
+#' @keywords internal
+#' @importFrom cli cli_warn
+#' @importFrom purrr map_chr
+#' @importFrom stats na.omit
+.get_key_cols = function(x, id_name, lookup){
+  if(is.null(lookup)) return(x)
+  
+  f = function(x, y) x[tolower(x) %in% tolower(y)][1] %0% NA 
+  
+  x = map_chr(lookup$names, ~f(.x, x))
+  
+  verbose = getOption("edc_get_key_cols_verbose", FALSE)
+  if(verbose && any(is.na(x))){
+    cli_warn(c("Default {id_name} identificator could not be found in some datasets", 
+               i='Dataset{?s} without identificator: {rtn[is.na(x), "dataset"]}', 
+               i='Use {.run options(edc_cols_id=c("my_id_col", "my_other_id_col"))}'), 
+             class="edcimport_get_key_cols_missing")
+  }
+  x %>% na.omit() %>% unique() 
+}
+
+
+
+#' Get columns shared by most datasets
+#' 
+#' In most trialmaster exports, many datasets share a certain amount of columns containing 
+#' meta-data that are often irrelevant to the point. This function identifies the columns 
+#' that are present in at least 95% of datasets (by default)
+#'
+#' @param min_pct Default=`0.95`. The minimal proportion of datasets a column has to reach. Subject ID is always excluded.
+#'
+#' @return a character vector
+#' @export
+#'
+#' @examples
+#' tm = edc_example_mixed()
+#' load_list(tm)
+#' meta_cols = get_meta_cols()
+#' long_mixed %>% dplyr::select(-dplyr::any_of(meta_cols))
+#' @importFrom dplyr filter pull setdiff
+get_meta_cols = function(min_pct = getOption("edc_meta_cols_pct", 0.95)){
+  a = get_common_cols(min_datasets=0)
+  subjid_cols = get_subjid_cols()
+  a %>% filter(pct_datasets>min_pct) %>% pull(column) %>% setdiff(subjid_cols)
+}
+
+#' Get columns that are common to multiple datasets
+#'
+#' `r lifecycle::badge("experimental")`
+#' Attempt to list all columns in the database and group the ones that are 
+#' common to some datasets.
+#' Useful to find keys to pivot or summarise data.
+#'
+#' @param lookup the lookup table, default to [edc_lookup()]
+#' @param min_datasets the minimal number of datasets to be considered
+#' @param object an object of class "common_cols"
+#' @param ... unused
+#'
+#' @return a tibble of class "common_cols"
+#' @export
+#' 
+#' @importFrom dplyr arrange desc filter mutate rowwise ungroup
+#' @importFrom purrr map_lgl
+#' @importFrom tibble tibble
+#'
+#' @examples
+#' tm = edc_example()
+#' load_list(tm)
+#' x = get_common_cols(min_datasets=1)
+#' x
+#' summary(x)
+get_common_cols = function(lookup=edc_lookup(), min_datasets=3){
+  all_names = lookup$names %>% unlist() %>% unique() %>% sort()
+  rtn = tibble(column=all_names) %>%
+    rowwise() %>% 
+    mutate(
+      name_in = lookup$names %>% map_lgl(~column %in% .x) %>% list(),
+      datasets = list(names(.data$name_in[.data$name_in])),
+      n_datasets = length(.data$datasets),
+      pct_datasets = mean(.data$name_in),
+      datasets_in = toString(names(.data$name_in[.data$name_in])),
+      datasets_out = toString(names(.data$name_in[!.data$name_in])),
+      # aaa = browser(),
+    ) %>% 
+    ungroup() %>% 
+    arrange(desc(.data$pct_datasets)) %>% 
+    filter(.data$n_datasets>=min_datasets) 
+  class(rtn) = c("common_cols", class(rtn))
+  rtn
+}
+
+
+#' @name get_common_cols
+#' @export
+#' @importFrom dplyr mutate n summarise
+summary.common_cols = function(object, ...){
+  object %>% 
+    summarise(
+      n_distinct_datasets = length(unique(.data$datasets)), 
+      n_columns = n(),
+      columns = list(.data$column), 
+      datasets = list(.data$datasets),
+      columns_str = toString(.data$column), 
+      .by=c(.data$pct_datasets, .data$n_datasets)
+    ) %>% 
+    mutate(
+      pct_datasets = sprintf("%0.0f%%", .data$pct_datasets * 100),
+    )
+}
 
 # Manage lists --------------------------------------------------------------------------------
 
@@ -334,7 +744,13 @@ load_list = function(x, env=parent.frame(), remove=TRUE){
   }
   list2env(x, env)
   
-  if(remove) remove(list=caller_arg(x), envir=env)
+  if(remove) {
+    x_name = caller_arg(x)
+    if(exists(x_name, where=env, inherits=FALSE)) 
+      remove(list=x_name, envir=env)
+    else                          
+      remove(list=x_name, envir=parent.frame())
+  }
 }
 
 #' Load a `.RData` file as a list
@@ -384,126 +800,18 @@ save_list = function(x, filename){
 
 
 
-# Lookup helpers ------------------------------------------------------------------------------
+# Methods -----------------------------------------------------------------
 
-
-#' Generate a lookup table
-#' @param data_list a list containing at least 1 dataframe
-#' @return a dataframe summarizing column names and labels 
-#' @examples
-#' x = edc_example()
-#' x$.lookup=NULL
-#' lk = get_lookup(x)
-#' lk
-#' lk %>% tidyr::unnest(c(names, labels))
-#' 
 #' @export
-#' @importFrom cli cli_abort
-#' @importFrom dplyr arrange mutate
-#' @importFrom labelled var_label
-#' @importFrom purrr map map_dbl
-#' @importFrom rlang is_named
-#' @importFrom tibble tibble
-get_lookup = function(data_list){
-  if(is.data.frame(data_list)) data_list = lst(!!caller_arg(data_list):=data_list)
-  if(!is.list(data_list)){
-    cli_abort(c("{.code data_list} should be a list.", 
-                i="{.code class(data_list)}: {.cls {class(data_list)}}"), 
-              class="edc_lookup_not_list")
-  }
-  data_list_n = format(names(data_list))
-  data_list[".lookup"] = data_list["date_extraction"] = data_list["datetime_extraction"] = NULL
-  if(length(data_list)==0){
-    cli_abort(c("{.code data_list} is empty or contains only non-dataframe elements.", 
-                i="{.code names(data_list)}: {.val {data_list_n}}"), 
-              class="edc_lookup_empty")
-  }
-  if(!is_named(data_list)){
-    cli_abort("Datasets in {.code data_list} should have a name.", 
-              class="edc_lookup_unnamed")
-  }
-  f = function(.x, expr, default) if(is.data.frame(.x)) expr else default
-  
-  tibble(dataset=tolower(names(data_list))) %>% 
-    mutate(
-      nrow=map_dbl(data_list, ~f(.x, nrow(.x), 0)), 
-      ncol=map_dbl(data_list, ~f(.x, ncol(.x), 0)), 
-      names=map(data_list, ~f(.x, names(.x), NULL)), 
-      labels=map(data_list, ~f(.x, var_label(.x, unlist=TRUE), NULL)), 
-    ) %>% 
-    arrange(nrow)
+#' @importFrom cli cat_rule cli_bullets cli_vec
+#' @importFrom purrr discard_at keep
+print.tm_database = function(x, ...){
+  x = x %>% keep(is.data.frame) %>% discard_at(".lookup")
+  cat_rule("Trialmaster database", col = "violet")
+  nms = cli_vec(names(x), list("vec-trunc"=3))
+  cli_bullets(c(
+    "{length(x)} tables: {.arg {nms}}",
+    i="Use {.code EDCimport::load_list(tm)} to load the tables in the global environment",
+    i="Use {.code print(tm$.lookup)} to see the summary table"
+  ))
 }
-
-
-#' @noRd
-#' @keywords internal
-set_lookup = function(lookup){
-  verbose = getOption("edc_lookup_overwrite_warn", TRUE)
-  if(verbose && !is.null(getOption("edc_lookup"))){
-    cli_warn("Option {.val edc_lookup} has been overwritten.", 
-             class="edc_lookup_overwrite_warn")
-  }
-  options(edc_lookup=lookup)
-}
-
-
-
-#' Extend the lookup table
-#' 
-#' This utility extends the lookup table to include: 
-#'   * `n_id` the number of patients present in the dataset
-#'   * `rows_per_id` the mean number of row per patient
-#'   * `crfname` the actual name of the dataset
-#'
-#' @param lookup \[`data.frame(1)`]\cr the lookup table
-#' @param key_columns \[`list(n)`]\cr for experts only
-#' @param datasets \[`data.frame(n)`]\cr for experts only
-#' @inheritParams read_tm_all_xpt
-#'
-#' @return the lookup, extended
-#' @export
-#' @importFrom cli cli_abort
-#' @importFrom dplyr arrange desc mutate relocate select
-#' @importFrom purrr map_chr map_int
-#' @importFrom rlang check_dots_empty
-#' @importFrom tidyselect last_col matches
-#' @examples
-#' #tm = read_trialmaster("filename.zip", pw="xx")
-#' tm = edc_example_mixed()
-#' load_list(tm)
-#' .lookup
-#' .lookup = extend_lookup(.lookup)
-#' .lookup
-extend_lookup = function(lookup, ..., 
-                         key_columns = get_key_cols(lookup),
-                         datasets = get_datasets(lookup)){
-  check_dots_empty()
-  #case-insensitive column selection (cf. `any_of2`)
-  f = function(x, colname){
-    rtn = map(colname, ~select(datasets[[x]], any_of2(.x))) %>% 
-      keep(~min(dim(.x))>0)
-    ncols = map_dbl(rtn, ncol) %>% unique()
-    if(length(ncols)>1) cli_abort("Several columns named {.val {colname}} in dataset {.val {x}} with discrepancies.")
-    if(length(ncols)==0 || ncols==0) return(NA)
-    if(ncols>1) cli_warn("Several columns named {.val {colname}} in dataset {.val {x}}.")
-    length(unique(rtn[[1]][[1]]))
-  }
-  rtn = lookup %>% 
-    mutate(
-      n_id = map_int(dataset, ~f(.x, key_columns$patient_id)),
-      rows_per_id = round(nrow/n_id, 1),
-      crfname = map_chr(dataset, ~get_data_name(datasets[[.x]]), crfname=key_columns$crfname)
-    ) %>% 
-    arrange(n_id, desc(nrow)) %>% 
-    relocate(c(names, labels), .after=last_col())
-  rtn
-}
-
-
-
-
-
-
-
-
-

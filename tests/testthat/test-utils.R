@@ -1,6 +1,17 @@
 
 
 skip_on_cran()
+edc_options(edc_lookup_overwrite_warn=FALSE)
+
+
+test_that("no exports", {
+  skip_if(is_checking())
+  testthat::test_path("../../R/utils.R") %>% 
+    readLines() %>% str_subset("@export") %>% expect_length(0)
+})
+
+
+
 
 # load_list() ---------------------------------------------------------------------------------
 
@@ -38,12 +49,8 @@ test_that("save_list() works", {
 
 test_that("get_folder_datetime() works", {
   folder = paste0(tempdir(), "/test_get_datetime")
-  dir.create(folder, showWarnings=FALSE)
-  file.create(paste0(folder, "/f1.R"))
-  file.create(paste0(folder, "/f2.R"))
-  file.create(paste0(folder, "/f3.R"))
-  file.create(paste0(folder, "/f4.R"))
-  file.create(paste0(folder, "/f5.R"))
+  fs::dir_create(folder)
+  fs::file_create(paste0(folder, "/f", 1:5, ".R"))
   dir(folder, full.names=TRUE)[1:3] %>% purrr::walk(~Sys.setFileTime(.x, "1975-01-01 CET"))
   # dir(folder, full.names=TRUE) %>% file.info() %>% select(mtime)
   x = get_folder_datetime(folder) %>% 
@@ -52,23 +59,23 @@ test_that("get_folder_datetime() works", {
 })
 
 
-# get_lookup() & find_keyword() ---------------------------------------------------------------
+# build_lookup() & find_keyword() ---------------------------------------------------------------
 
-test_that("get_lookup() works", {
+test_that("build_lookup() works", {
   
   x = edc_example()
   x$.lookup=NULL
-  lookup = get_lookup(x)
+  lookup = build_lookup(x)
   expect_equal(lengths(lookup$names), c(db0=5,db2=5,db3=6,db1=6))
   expect_true(all(nzchar(lookup$labels$i)))
   expect_false(any(nzchar(lookup$labels$m)))
   # lookup %>% unnest(everything())
   
   x = list(i=iris, mtcars)
-  get_lookup(x) %>% 
+  build_lookup(x) %>% 
     expect_error(class="edc_lookup_unnamed")
   x = list(date_extraction=1, datetime_extraction=1, .lookup=mtcars)
-  get_lookup(x) %>% 
+  build_lookup(x) %>% 
     expect_error(class="edc_lookup_empty")
 })
 
@@ -124,34 +131,25 @@ test_that("7zip not in the path", {
 
 
 
-# Options -------------------------------------------------------------------------------------
-
-
-test_that("No missing options", {
-  missing_options = missing_options_helper()
-  expect_identical(missing_options, character(0))
-})
-
 # Expect --------------------------------------------------------------------------------------
-
 
 
 test_that("expect_classed_conditions()", {
   fun1 = function(){
-    rlang::inform("I am a message", class="message1")
-    rlang::inform("I am a message too", class="message2")
-    rlang::inform("I am a message three", class="message3")
-    rlang::warn("Beware, I am a warning", class="warn1")
-    rlang::warn("Beware, I am a warning 2", class="warn2")
-    rlang::abort("STOP, I am the error!", class="error1")
+    inform("I am a message", class="message1")
+    inform("I am a message too", class="message2")
+    inform("I am a message three", class="message3")
+    warn("Beware, I am a warning", class="warn1")
+    warn("Beware, I am a warning 2", class="warn2")
+    abort("STOP, I am the error!", class="error1")
     999
   }
   fun2 = function(){
-    rlang::inform("I am a message", class="message1")
-    rlang::inform("I am a message too", class="message2")
-    rlang::inform("I am a message three", class="message3")
-    rlang::warn("Beware, I am a warning", class="warn1")
-    rlang::warn("Beware, I am a warning 2", class="warn2")
+    inform("I am a message", class="message1")
+    inform("I am a message too", class="message2")
+    inform("I am a message three", class="message3")
+    warn("Beware, I am a warning", class="warn1")
+    warn("Beware, I am a warning 2", class="warn2")
     999
   }
   
@@ -170,15 +168,71 @@ test_that("expect_classed_conditions()", {
                             message_class=c("message1", "message2", "xxxx"),
                             warning_class=c("warn1", "xxxx"), 
                             error_class="xxxx") %>% 
-    expect_error("error1.*xxxx")
+    expect_error("xxxx.*error1")
   expect_classed_conditions(fun1(), 
                             message_class=c("message1", "message2", "xxxx"),
                             warning_class=c("warn1", "xxxx"), 
                             error_class="error1") %>% 
-    expect_error("warn2.*xxxx")
+    expect_error("xxxx.*warn2")
   expect_classed_conditions(fun1(), 
                             message_class=c("message1", "message2", "xxxx"),
                             warning_class=c("warn1", "warn2"), 
                             error_class="error1") %>% 
-    expect_error("message3.*xxxx")
+    expect_error("xxxx.*message3")
+})
+
+
+
+# Misc ----------------------------------------------------------------------------------------
+
+
+test_that("fct_yesno() works", {
+  
+  set.seed(42)
+  N=20
+  x = tibble(
+    eng=sample(c("Yes", "No"), size=N, replace=TRUE),
+    fra=sample(c("Oui", "Non"), size=N, replace=TRUE),
+    bin=sample(0:1, size=N, replace=TRUE),
+    log=sample(c(TRUE, FALSE), size=N, replace=TRUE),
+    eng2=sample(c("1-Yes", "0-No"), size=N, replace=TRUE),
+
+    chr=sample(c("aaa", "bbb", "ccc"), size=N, replace=TRUE),
+    num=1:N,
+  )
+  x[10:11,] = NA
+  
+  
+  expect_snapshot({
+    
+    fct_yesno("Yes")
+    fct_yesno(c("No", "Yes"))
+    
+    mutate_all(x, fct_yesno, fail=FALSE)
+    mutate_all(x, fct_yesno, fail=FALSE, strict=TRUE)
+    mutate_all(x, fct_yesno, fail=FALSE, input=list(yes="Ja", no="Nein"))
+  })
+  
+  mutate_all(x, fct_yesno, fail=TRUE) %>% expect_error(class="fct_yesno_unparsed_error")
+  fct_yesno(x$chr) %>% expect_error(class="fct_yesno_unparsed_error")
+  # fct_yesno(x$num) %>% expect_error(class="fct_yesno_unparsed_error") #TODO?
+  fct_yesno("YesNo") %>% expect_error(class="fct_yesno_both_error")
+  fct_yesno("foobar") %>% expect_error(class="fct_yesno_unparsed_error")
+  
+})
+
+
+test_that("cli_menu() is not in package cli yet", {
+  # exists('cli_menu', where='package:cli', mode='function') %>% expect_false()
+  expect_false("package:cli" %in% find("cli_menu"))
+})
+
+
+test_that("edc_db_to_excel() works", {
+  tm = edc_example()
+  load_list(tm)
+  filename=tempfile(fileext=".xlsx")
+  edc_db_to_excel(filename=filename, datasets=get_datasets(), open=FALSE) %>% expect_message()
+  expect_true(file.exists(filename))
+  file.remove(filename)
 })
