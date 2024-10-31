@@ -1,6 +1,6 @@
-03bf2f72a6148c786f25a04df5713743 *DESCRIPTION
+5120e9280f5ec3b890cccf882d7dca43 *DESCRIPTION
 736fd4c0646916830f9e438b0337c5ff *NAMESPACE
-24555f33c4fe4bf7805478850264f394 *NEWS.md
+7c5c7ebfa7483022b00b5dea50f9f8b8 *NEWS.md
 3e15fbbf173f40d4461989cd727fe700 *R/7zip.R
 d0727a1de04a15c6101cce78d1339f8d *R/EDCimport-package.R
 11b8538aebc4644c5ad24cdd10f0504e *R/assertions.R
@@ -79,7 +79,7 @@ a755bd3944dd4caf3634ff5a9cc38dd9 *tests/testthat/_snaps/population_plot.md
 3c0c2fd635c5552fb4bb61cb5fc02d02 *tests/testthat/_snaps/read_all_csv.md
 40491f2ec6e0b826abcbfca50e03f907 *tests/testthat/_snaps/sanity.md
 d0a41d9483a5d7ab1714ad3f66b2a221 *tests/testthat/_snaps/search_data.md
-c2a9896201fa78821306f53f89edc5ae *tests/testthat/_snaps/trialmaster-simple.md
+46b5d844bcc8ce46594f299dc29a4183 *tests/testthat/_snaps/trialmaster-simple.md
 279a0457aa70482a5e9b4b80bc40b5a6 *tests/testthat/_snaps/utils.md
 d203b87da25626dc11ded60aceb14148 *tests/testthat/csv/db0.csv
 7d92b016b7347b03f39f0b53a8a12cd3 *tests/testthat/csv/db1.csv
@@ -93,7 +93,7 @@ feb1b990168be5375098bad8083ca563 *tests/testthat/edc_example_mixed_SAS_XPORT_200
 36e03a4c2d00f093f344e19882fde077 *tests/testthat/edc_example_mixed_SAS_XPORT_2000_01_01_00_00/long_pure.xpt
 49f38717dd18422545d881d88c1c10fd *tests/testthat/edc_example_mixed_SAS_XPORT_2000_01_01_00_00/procformat.sas
 a37a27d54973d162e20a5e5e134ffb87 *tests/testthat/edc_example_mixed_SAS_XPORT_2000_01_01_00_00/short.xpt
-959b1eb207e6aba2a2972f57c5e41940 *tests/testthat/helper-init.R
+724be1bfbacbd527edbe0bfe88d44329 *tests/testthat/helper-init.R
 4861b869b8a0a31412b4522e72145af1 *tests/testthat/helper-local.R
 56212234a10545735f0838916593598f *tests/testthat/test-helpers.R
 9b4b9bfc797093d6e1cde18921f09559 *tests/testthat/test-local.R
@@ -106,6 +106,6 @@ d5ab6ae4f08b663141643ee1ba28de0d *tests/testthat/test-quicktest.R
 c80cd61d521c0ec3c6adaf55df1a061c *tests/testthat/test-sanity.R
 f777a17cc2f96779d0531650d59d8c17 *tests/testthat/test-search_data.R
 7fba5f270bcf049afc4a38a5dcdd7325 *tests/testthat/test-split_mixed.R
-b6c05b6ddd65dd5e0f7800cb3b69a519 *tests/testthat/test-trialmaster-simple.R
+ddb635deb549c85983e7c4b03b4aad4a *tests/testthat/test-trialmaster-simple.R
 9cb2401f6a53f2f796d66180f82ddc22 *tests/testthat/test-trialmaster.R
 a16542b9f2a9a6714dbf8ea039b53c30 *tests/testthat/test-utils.R
