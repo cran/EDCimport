@@ -954,13 +954,53 @@
     Code
       lastnews_table()
     Condition
-      Warning in `lastnews_table()`:
-      NAs introduced by coercion
+      Warning:
+      Date of last news after the extraction date (4 patients: #02-CB-018, #02-JO-036, #04-LM-041, and #04-MS-031)
     Output
-      # A tibble: 1 x 5
-        subjid last_date  origin_data origin_col origin_label                       
-         <dbl> <date>     <chr>       <chr>      <chr>                              
-      1     NA 2024-03-29 ltfu        LTFULKSDT  Date of the last known status (drv)
+      # A tibble: 41 x 5
+         subjid    last_date  origin_data origin_col origin_label                     
+         <chr>     <date>     <chr>       <chr>      <chr>                            
+       1 01-AH-015 2020-07-09 ht          HTDT       Date of biopsy for diagnosis (dr~
+       2 01-AH-008 2021-01-11 sd          SDDT       Study discontinuation date (drv) 
+       3 01-BA-034 2022-04-16 sd          SDDT       Study discontinuation date (drv) 
+       4 01-BN-009 2021-03-31 fu          FULKSDT    Date of the last known status (d~
+       5 01-CA-006 2020-07-14 ltfu        LTFULKSDT  Date of the last known status (d~
+       6 01-CL-004 2019-11-28 ht          HTDT       Date of biopsy for diagnosis (dr~
+       7 01-GJ-001 2021-01-04 fu          FULKSDT    Date of the last known status (d~
+       8 01-LA-025 2023-07-13 ltfu        LTFULKSDT  Date of the last known status (d~
+       9 01-MT-027 2023-04-10 ltfu        LTFULKSDT  Date of the last known status (d~
+      10 01-PA-016 2020-07-29 ae          AEENDT     End date of the AE (drv)         
+      11 01-SA-014 2023-11-22 ltfu        LTFULKSDT  Date of the last known status (d~
+      12 01-TA-028 2021-10-27 vs          VISDT      Visit Date (drv)                 
+      13 01-TI-030 2023-12-15 fu          FULKSDT    Date of the last known status (d~
+      14 01-TN-003 2023-10-17 ltfu        LTFULKSDT  Date of the last known status (d~
+      15 02-BL-022 2021-06-23 ltfu        LTFULKSDT  Date of the last known status (d~
+      16 02-CB-018 2024-03-04 ltfu        LTFULKSDT  Date of the last known status (d~
+      17 02-JO-036 2024-03-29 ltfu        LTFULKSDT  Date of the last known status (d~
+      18 02-MN-012 2021-04-18 ltfu        LTFULKSDT  Date of the last known status (d~
+      19 02-RH-010 2022-11-21 mri         MRIDT      Examination Date (drv)           
+      20 02-TO-039 2023-10-04 sd          SDDT       Study discontinuation date (drv) 
+      21 03-BC-007 2022-11-24 ltfu        LTFULKSDT  Date of the last known status (d~
+      22 03-MI-019 2022-09-23 ltfu        LTFULKSDT  Date of the last known status (d~
+      23 03-SO-020 2022-02-13 ltfu        LTFULKSDT  Date of the last known status (d~
+      24 04-BS-033 2023-08-11 ltfu        LTFULKSDT  Date of the last known status (d~
+      25 04-CL-023 2021-12-31 ltfu        LTFULKSDT  Date of the last known status (d~
+      26 04-LJ-002 2024-01-06 ne          NEDT       Examination Date (drv)           
+      27 04-LM-041 2024-02-28 fu          FULKSDT    Date of the last known status (d~
+      28 04-MS-031 2024-03-28 ltfu        LTFULKSDT  Date of the last known status (d~
+      29 04-PA-032 2022-01-24 el          INCDT      Inclusion date (drv)             
+      30 05-CL-017 2022-04-11 ltfu        LTFULKSDT  Date of the last known status (d~
+      31 05-DE-037 2024-01-23 ne          NEDT       Examination Date (drv)           
+      32 05-KA-040 2023-10-26 dm          ENTTDT     End of treatment date (drv)      
+      33 07-DA-005 2023-12-20 ltfu        LTFULKSDT  Date of the last known status (d~
+      34 07-HS-024 2023-03-24 ltfu        LTFULKSDT  Date of the last known status (d~
+      35 07-IS-038 2024-02-13 fu          FULKSDT    Date of the last known status (d~
+      36 07-RE-029 2021-12-16 ht          HTDT       Date of biopsy for diagnosis (dr~
+      37 07-SC-035 2022-09-13 ltfu        LTFULKSDT  Date of the last known status (d~
+      38 07-ZA-013 2021-05-06 ltfu        LTFULKSDT  Date of the last known status (d~
+      39 08-AZ-011 2021-02-28 ltfu        LTFULKSDT  Date of the last known status (d~
+      40 08-BA-026 2022-02-28 ltfu        LTFULKSDT  Date of the last known status (d~
+      41 08-BA-021 2023-07-18 ltfu        LTFULKSDT  Date of the last known status (d~
     Code
       get_datasets() %>% map(table_format, warn = FALSE) %>% unlist()
     Output

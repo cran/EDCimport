@@ -1,5 +1,5 @@
 Package: EDCimport
-Version: 0.5.1
+Version: 0.5.2
 Title: Import Data from EDC Software
 Authors@R: 
     c(person(given = "Dan",
@@ -32,8 +32,8 @@ Collate: '7zip.R' 'EDCimport-package.R' 'assertions.R' 'burgled.R'
         'search_for_newer_data.R' 'split_mixed.R' 'swimmerplot.R'
         'utils_read.R'
 NeedsCompilation: no
-Packaged: 2024-10-31 15:47:15 UTC; Dan
+Packaged: 2024-11-14 14:14:50 UTC; Dan
 Author: Dan Chaltiel [aut, cre] (<https://orcid.org/0000-0003-3488-779X>)
 Maintainer: Dan Chaltiel <dan.chaltiel@gmail.com>
 Repository: CRAN
-Date/Publication: 2024-10-31 17:10:02 UTC
+Date/Publication: 2024-11-14 16:10:11 UTC
