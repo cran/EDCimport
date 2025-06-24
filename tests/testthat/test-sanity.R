@@ -2,81 +2,120 @@
 test_that("edc_data_warn snapshot", {
   clean_lookup()
   reset_warn_list()
-  tm = edc_example()
-  attach(tm)
+  db = edc_example()
+  load_database(db)
   
   expect_snapshot({
     #default
-    db0 %>%
-      filter(age>60) %>%
-      edc_data_warn("Age should not be >60")
+    enrol %>%
+      select(subjid, enrol_date, age) %>% 
+      filter(age>80) %>%
+      edc_data_warn("Age should not be >80")
+    enrol %>%
+      select(subjid, enrol_date, age) %>% 
+      filter(age>70) %>%
+      edc_data_warn("Age should not be >70")
     
     #no issue_n
-    db0 %>%
-      filter(age>70) %>%
-      edc_data_warn("Age should not be >70", issue_n=NULL)
+    enrol %>%
+      select(subjid, enrol_date, age) %>% 
+      filter(age>60) %>%
+      edc_data_warn("Age should not be >60", issue_n=NULL)
+    enrol %>%
+      select(subjid, enrol_date, age) %>% 
+      filter(age>60) %>%
+      edc_data_warn("No, Age should not be >60", issue_n=NULL)
     
     #with issue_n & max_subjid
-    db0 %>%
-      filter(age>20) %>%
-      edc_data_warn("Age should not be >20", issue_n=1, max_subjid=2)
+    enrol %>%
+      select(subjid, enrol_date, age) %>% 
+      filter(age>50) %>%
+      edc_data_warn("Age should not be >50", issue_n=1, max_subjid=2)
     
-    #multiple subjid proposals
-    db0 %>%
-      filter(age>70) %>%
-      edc_data_warn("Age should not be >70", issue_n=NULL, col_subjid=c("SUBJID", "PATNO"))
+    #alternative SUBJID column
+    enrol %>%
+      select(PATNO=subjid, age) %>% 
+      filter(age>40) %>%
+      edc_data_warn("Age should not be >40", issue_n=NULL, 
+                    col_subjid=c("subjid", "PATNO"))
     
     
     ## WARNINGS
     
     #warning, multiple subjid found
-    db0 %>%
-      filter(age>70) %>%
-      edc_data_warn("Age should not be >70", issue_n=2, col_subjid=c("SUBJID", "group"))
+    enrol %>%
+      select(subjid, enrol_date, age, arm) %>% 
+      filter(age>30) %>%
+      edc_data_warn("Age should not be >30", issue_n=2, col_subjid=c("subjid", "arm"))
     
     #warning, multiple subjid found, reverse order
-    db0 %>%
+    enrol %>%
+      select(subjid, enrol_date, age, arm) %>% 
+      filter(age>20) %>%
+      edc_data_warn("Age should not be >20", issue_n=3, col_subjid=c("arm", "subjid"))
+    
+    ## DUPLICATES 
+    
+    #duplicate of issue number
+    enrol %>%
+      filter(age>50) %>%
+      edc_data_warn("Age should not be >50", issue_n=1)
+    
+    #duplicate without issue number
+    enrol %>%
+      select(subjid, enrol_date, age) %>% 
       filter(age>70) %>%
-      edc_data_warn("Age should not be >70", issue_n=3, col_subjid=c("group", "SUBJID"))
-  
+      edc_data_warn("Age should not be >70")
     
     edc_data_warnings()
   })
   
+  
+  #post-snapshot: test save_edc_data_warnings()
+  w = edc_data_warnings()
+  expect_equal(nrow(w), 5)
+  
+  f = tempfile(fileext=".xlsx")
+  save_edc_data_warnings(edc_warnings=w, path=f, open=FALSE)
+  assert_file_exists(f)
+  file.remove(f)
+  
 })
+
 
 test_that("edc_data_warn errors", {
   clean_lookup()
-  tm = edc_example()
-  attach(tm)
+  db = edc_example()
+  load_database(db)
   
   #error expected
-  db0 %>%
+  enrol %>%
     filter(age>70) %>%
     edc_data_stop("Age should never be >70", issue_n=99) %>% 
-    expect_error()
+    expect_error(class="edc_data_condition")
   
   #error subjid not found
-  db0 %>%
+  enrol %>%
     filter(age>70) %>%
     edc_data_warn("Age should not be >70", issue_n=98, col_subjid=c("PATNO")) %>% 
     expect_error(class="edc_data_condition_subjid_error")
   
 })
 
+
 test_that("edc_data_warn CSV", {
   clean_lookup()
-  tm = edc_example()
-  attach(tm)
+  db = edc_example()
+  load_database(db)
   
   path = tempfile(fileext=".csv")
   
   expect_false(file_exists(path))
   
-  input = db0 %>%
+  input = enrol %>%
     as.data.frame() %>% 
     filter(age>70) %>%
-    select(SUBJID, age, group) %>% 
+    select(subjid, age, arm) %>% 
     remove_labels()
   
   input %>% 

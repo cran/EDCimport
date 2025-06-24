@@ -2,9 +2,50 @@
 
 EDCimport is a package designed to easily import data from EDC software TrialMaster. Browse code at <https://github.com/DanChaltiel/EDCimport> and read the doc at <https://danchaltiel.github.io/EDCimport/>.
 
+# EDCimport 0.6.0
+
+### Documentation
+
+-   New vignettes: `vignette("reading")`, `vignette("postprocessing")`, `vignette("checking")`, `vignette("visualizing")`, and `vignette("utils")`
+
+### New features
+
+-   New functions `edc_patient_gridplot()`, which creates a ggplot matrix giving the presence of all patients in all datasets (#77)
+-   New functions `edc_left_join()`, `edc_right_join()`, and `edc_full_join()`, which perform joins with defaults to subject ID as primary key (#82)
+-   New function `edc_viewer()`, which runs a shiny application for easily browsing your database (#83)
+-   New function `set_project_name()`, to set the project name when reading from a directory (#96)
+-   New function `edc_find_value()`, which searches the whole database for a value, as `edc_find_column()` searches for column names or labels.
+-   New function `save_edc_data_warnings()`, to save all the warnings triggered by `edc_data_warn()` into a `.xlsx` file for sharing.
+
+### Bug fixes & Improvements
+
+-   New argument `unify(collapse_chr=TRUE)`, to collapse non-unique character values (#99)
+-   New argument `lastnews_table(show_delta=TRUE)`, which computes the difference between the last `prefer` date and the actual last date (#81)
+    -   Other improvements: allow regex in `except` & `prefer` (with `regex=TRUE`), improved warning message, and allow saving warnings in a csv file (#78)
+-   New argument `edc_data_warn(envir)`, the environment to evaluate `message` in.
+-   New argument `edc_swimmerplot(include)`, to subset the swimmer plot on significant variables only.
+-   New argument `subdirectories` to all reading functions (`read_trialmaster()`, `read_all_xpt()`, `read_all_sas()`, and `read_all_csv()`), to control whether to read sub-directories. Note that until now, those subdirectories were read and could overwrite root files.
+-   Fixed labels being sometimes duplicated.
+
+### Internal improvements
+
+-   `read_trialmaster()` won't read from cache if installed EDCimport version is different from cache's
+
+### Deprecations
+
+-   `load_list()`, renamed to `load_database()`
+-   `find_keyword()`, renamed to `edc_find_column()`
+
+### Breaking changes
+
+I don't think enough people are using this so that it is necessary to go through the deprecation process.
+
+-   `split_mixed_datasets` becomes `edc_split_mixed()`
+-   Removed export of internal functions: `build_lookup()`, `extend_lookup()`, `get_key_cols()`, `get_subjid_cols()`, `get_crfname_cols()`, `get_meta_cols()`, `load_as_list()`, `save_list()`
+
 # EDCimport 0.5.2
 
--   Fixed a bug in `lastnews_table()` when subjid is not numeric
+-   Fixed a bug in `lastnews_table()` when SUBJID is not numeric
 -   Fixed a bug in `read_all_sas()` causing metadata (e.g. `date_extraction`) being converted to dataframes
 
 # EDCimport 0.5.1
@@ -47,7 +88,7 @@ EDCimport is a package designed to easily import data from EDC software TrialMas
 
 -   New function `search_for_newer_data()` to search a path (e.g. Downloads) for a newer data archive (#46).
 
--   New function `crf_status_plot()` to show the current database completion status (#48).
+-   New function `edc_crf_plot()` to show the current database completion status (#48).
 
 -   New function `save_sessioninfo()`, to save `sessionInfo()` into a text file (#42).
 
@@ -55,7 +96,7 @@ EDCimport is a package designed to easily import data from EDC software TrialMas
 
 -   New function `lastnews_table()` to find the last date an information has been entered for each patient (#37). Useful for survival analyses.
 
--   New function `harmonize_subjid()`, to have the same structure for subject IDs in all the datasets of the database (#30).
+-   New function `edc_unify_subjid()`, to have the same structure for subject IDs in all the datasets of the database (#30).
 
 -   New function `save_plotly()`, to save a `plotly` to an HTML file (#15).
 
@@ -76,8 +117,6 @@ EDCimport is a package designed to easily import data from EDC software TrialMas
 -   `get_key_cols()` is replaced by `get_subjid_cols()` and `get_crfname_cols()`.
 -   `check_subjid()` is replaced by `edc_warn_patient_diffs()`. It can either take a vector or a dataframe as input, and the message is more informative.
 
-
-
 # EDCimport 0.4.1
 
 ### Bug fixes & Improvements
@@ -85,7 +124,6 @@ EDCimport is a package designed to easily import data from EDC software TrialMas
 -   Changes in testing environment so that the package can be installed from CRAN despite firewall policies forbidding password-protected archive downloading.
 
 -   Fixed a bug where a corrupted XPT file can prevent the whole import to fail.
-
 
 # EDCimport 0.4.0
 

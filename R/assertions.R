@@ -28,9 +28,16 @@ assert = function(x, msg=NULL, call=parent.frame(), class=NULL){
 #' @examples
 #' assert_file_exists("R/data.R")
 #' assert_file_exists("R/data.SAS")
+#' @importFrom cli cli_abort
 #' @importFrom fs file_exists
 assert_file_exists = function(x, msg=NULL, class=NULL){
-  assert(all(file_exists(x)), msg, call=parent.frame(), class=class)
+  missing_files = !file_exists(x)
+  if(is.null(msg)){
+    msg = "Missing file{?s}: {.path {x[missing_files]}}"
+  }
+  if(any(missing_files)){
+    cli_abort(msg, call=parent.frame(), class=class)
+  }
 }
 
 
@@ -45,6 +52,7 @@ assert_class = function(x, class, null.ok=TRUE){
   }
   invisible(TRUE)
 }
+
 
 #' @noRd
 #' @keywords internal
@@ -110,9 +118,12 @@ check_invalid_utf8 = function(lookup=edc_lookup(), warn=FALSE){
 #' @noRd
 #' @keywords internal
 can_be_numeric = function(x){
+  if(length(x)==0) return(NA)
+  if(is.factor(x)) return(FALSE)
   stopifnot(is.atomic(x) || is.list(x))
-  xnum_na <- suppressWarnings(is.na(as.numeric(x)))
-  all(is.na(x)==xnum_na)
+  xnum_na = suppressWarnings(is.na(as.numeric(x)))
+  wrong = x[is.na(x)!=xnum_na]
+  structure(length(wrong)==0, wrong=wrong)
 }
 
 
@@ -120,4 +131,11 @@ can_be_numeric = function(x){
 #' @keywords internal
 is.Date = function (x) {
   inherits(x, "POSIXt") || inherits(x, "POSIXct") || inherits(x, "Date")
+}
+
+
+#' @noRd
+#' @keywords internal
+is_edc_error = function(x){
+  inherits(x, "edc_error") || inherits(x, "edc_error_col") || inherits(x, "edc_error_data")
 }

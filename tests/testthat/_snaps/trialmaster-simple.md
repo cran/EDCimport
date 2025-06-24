@@ -22,7 +22,7 @@
       Size: 61533
       Compressed: 13576
       Writing cache file './trialmaster_export_2022-08-25 15h16.rds'
-      v Database loaded: 8 tables, 000 Kb
+      ✔ Database loaded: 5 tables, 000 Kb
     Code
       w$datetime_extraction
     Output
@@ -30,14 +30,14 @@
     Code
       w$.lookup
     Output
-      -- Lookup table - CRF (extraction of 2022-08-25) - EDCimport v0.0.0 ----------------------------------------------------
+      ── Lookup table - CRF (extraction of 2022-08-25) - EDCimport v0.0.0 ─────────────────────────────────────────────────────────
         dataset  nrow  ncol  n_id rows_per_id crfname                       
         <chr>   <dbl> <dbl> <int>       <dbl> <chr>                         
-      1 site        1    33    NA          NA Trial Site Setup & Information
-      2 trial       1    23    NA          NA Trial                         
-      3 pat         0    35    NA          NA <NA>                          
-      4 visit       0    27    NA          NA <NA>                          
-      5 vs          0    31    NA          NA <NA>                          
+      1 site        1    33     0          NA Trial Site Setup & Information
+      2 trial       1    23     0          NA Trial                         
+      3 pat         0    35     0          NA <NA>                          
+      4 visit       0    27     0          NA <NA>                          
+      5 vs          0    31     0          NA <NA>                          
     Code
       lu = edc_lookup()
       expect_identical(lu, w$.lookup)
@@ -47,7 +47,7 @@
       })
     Output
       $pat
-      # A tibble: 35 x 2
+      # A tibble: 35 × 2
          name     value                                   
          <chr>    <chr>                                   
        1 TRNAME   Trial Name                              
@@ -87,7 +87,7 @@
       35 CHECKDU1 Check of duplicate patient              
       
       $site
-      # A tibble: 33 x 2
+      # A tibble: 33 × 2
          name     value                                   
          <chr>    <chr>                                   
        1 TRNAME   Trial Name                              
@@ -125,7 +125,7 @@
       33 INVDAT   Deactivation date                       
       
       $trial
-      # A tibble: 23 x 2
+      # A tibble: 23 × 2
          name     value                                   
          <chr>    <chr>                                   
        1 TRNAME   Trial Name                              
@@ -153,7 +153,7 @@
       23 INCLTRIA Authorisation of inclusion              
       
       $visit
-      # A tibble: 27 x 2
+      # A tibble: 27 × 2
          name     value                                   
          <chr>    <chr>                                   
        1 TRNAME   Trial Name                              
@@ -185,7 +185,7 @@
       27 PRV      PRV                                     
       
       $vs
-      # A tibble: 31 x 2
+      # A tibble: 31 × 2
          name     value                                   
          <chr>    <chr>                                   
        1 TRNAME   Trial Name                              

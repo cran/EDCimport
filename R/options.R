@@ -13,11 +13,11 @@
 #' @param edc_subjid_ref **used in [edc_warn_patient_diffs]** the vector of the reference subject IDs. You should usually write `edc_options(edc_subjid_ref=enrolres$subjid)`.
 #' @param edc_plotly **used in [edc_swimmerplot]** whether to use plotly to visualize the plot.
 #' @param edc_fct_yesno **used in [fct_yesno]** list of values to be considered as Yes/No values. Defaults to `get_yesno_lvl()`.
-#' @param edc_cols_subjid,edc_cols_meta **used in [get_key_cols]** the name of the columns holding the subject id (default to `c("ptno", "subjid")`) and the CRF form name (default to `c("crfname")`). It is case-insensitive.
+#' @param edc_cols_subjid,edc_cols_meta the name of the columns holding the subject id (default to `c("ptno", "subjid")`) and the CRF form name (default to `c("crfname")`). It is case-insensitive.
 #' @param edc_cols_id,edc_cols_crfname deprecated
 #' @param edc_warn_max_subjid The max number of subject IDs to show in [edc_data_warn]
 #' @param edc_meta_cols_pct The minimal proportion of datasets a column has to reach to be considered "meta"
-#' @param edc_read_verbose,edc_correction_verbose,edc_get_key_cols_verbose the verbosity of the output of functions [read_trialmaster] and [read_tm_all_xpt], [manual_correction], and [get_key_cols]. For example, set `edc_options(edc_read_verbose=0)` to silence the first 2.
+#' @param edc_read_verbose,edc_correction_verbose,edc_get_key_cols_verbose the verbosity of the output of functions [read_trialmaster] and [read_all_xpt], and [manual_correction]. For example, set `edc_options(edc_read_verbose=0)` to silence the first 2.
 #' @param edc_lookup_overwrite_warn default to TRUE. Whether there should be warning when overwriting `.lookup` (like when reading 2 databases successively)
 #' @param .local  if TRUE, the effect will only apply to the local frame (internally using `rlang::local_options()`)
 #'
@@ -56,7 +56,7 @@ edc_options = function(
 }
 
 
-#' See which `EDCimport` option is currently set.
+#' See which `EDCimport` option is currently set
 #'
 #' @param keep_null set to TRUE to get a list
 #'
@@ -71,7 +71,7 @@ edc_peek_options = function(keep_null=FALSE){
   rtn
 }
 
-#' Reset all `EDCimport` options.
+#' Reset all `EDCimport` options
 #'
 #' @param except options that are not reset by default
 #' @param quiet set to `TRUE` to remove the message.

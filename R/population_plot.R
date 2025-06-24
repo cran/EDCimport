@@ -3,7 +3,7 @@
 #' In a RCT, you usually have several populations of analysis, and this function allow to show 
 #' which patient is in which population graphically.
 #'
-#' @param x a named list of subject ID.
+#' @param x a named list of subject ID, as numeric or factor.
 #' @param id_per_row number of patients per rows.
 #' @param ref the whole population. Default to the first member of `x`.
 #'
@@ -41,8 +41,9 @@ edc_population_plot = function(x, id_per_row=50, ref="first"){
   assert_class(x, "list")
   assert_class(id_per_row, c("numeric", "integer", "double"))
   assert(is_named(x))
+  x = map(x, as.numeric)
   if(identical(ref, "first")) ref = x[[1]]
-  else assert_class(ref, c("numeric", "integer", "double"))
+  assert_class(ref, c("numeric", "integer", "double"))
   
   iwalk(x, ~{
     if(anyNA(.x)) cli_abort("There should not be missing data in list member {.val {.y}}",
@@ -50,23 +51,22 @@ edc_population_plot = function(x, id_per_row=50, ref="first"){
   })
   
   y = x %>% map(~ref %in% .x) %>% bind_cols()
-  
   range_sup = ceiling(max(ref) / id_per_row) * id_per_row
-  breaks=seq(0, range_sup, by=id_per_row)
+  breaks = seq(0, range_sup, by=id_per_row)
   
-  df = tibble(SUBJID=ref, !!!y) %>% 
-    pivot_longer(-SUBJID) %>% 
-    mutate(group=cut(SUBJID, breaks=breaks),
+  df = tibble(subjid=ref, !!!y) %>% 
+    pivot_longer(-subjid) %>% 
+    mutate(group=cut(subjid, breaks=breaks),
            name=factor(name, levels=rev(names(x))),
            value=fct_yesno(value))
-  dummy = tibble(SUBJID=range_sup, name=last(df$name), 
+  dummy = tibble(subjid=range_sup, name=last(df$name), 
                  value=last(df$value), group=last(df$group))
   df %>% 
-    ggplot(aes(x=SUBJID, y=name, fill=value)) +
+    ggplot(aes(x=subjid, y=name, fill=value)) +
     geom_tile(color="black") +
     geom_tile(data=dummy, fill="transparent") +
     facet_wrap(~group, ncol=1, scales="free_x", strip.position="right") +
-    labs(x="Patient ID", y=NULL, fill="Patient included") +
+    labs(x="Patient number", y=NULL, fill="Patient included") +
     theme(legend.position="top",
           strip.background = element_blank(),
           strip.text.x = element_blank())

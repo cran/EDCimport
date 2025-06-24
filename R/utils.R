@@ -1,32 +1,4 @@
 
-
-
-#' Rudimentary function to clean the names
-#'
-#' Avoids a dependency to janitor.
-#'
-#' @param string a string to clean
-#' @param from the current encoding. passed on to [iconv()]. `""` is the current locale.
-#'
-#' @keywords internal
-#' @noRd
-#' @importFrom stringr str_remove_all
-#' @source janitor:::old_make_clean_names(), tweaked with iconv for accents
-#' @examples
-#' edc_make_clean_name("àccénts")
-edc_make_clean_name = function (string, from = "") {
-  old_names <- string
-  new_names <- old_names %>% gsub("'", "", .) %>% gsub("\"", "", .) %>% gsub("%", "percent", .) %>% 
-    gsub("^[ ]+", "", .) %>% make.names(.) %>% gsub("[.]+", "_", .) %>% gsub("[_]+", "_", .) %>% 
-    tolower(.) %>% gsub("_$", "", .) %>% iconv(from = from, to = "ASCII//TRANSLIT") %>% 
-    str_remove_all("[\r\n]")
-  dupe_count <- vapply(seq_along(new_names), function(i) {sum(new_names[i] == new_names[1:i])}, 
-                       integer(1))
-  new_names[dupe_count > 1] <- paste(new_names[dupe_count > 1], dupe_count[dupe_count > 1], sep = "_")
-  new_names
-}
-
-
 #' @noRd
 #' @keywords internal
 #' @source vctrs::`%0%`
@@ -70,24 +42,12 @@ fct_last = function(f, ...) {
 #' @noRd
 #' @keywords internal
 percent = function(x, digits=0){
+  if(all(is.na(x)|is.nan(x))) return(NA)
   stopifnot(abs(x)<=1)
   x=round(x*100, digits)
   paste0(x,"%")
 }
 
-#' adverb that adds a deprecated warning
-#' @noRd
-#' @keywords internal
-#' @importFrom lifecycle deprecate_warn
-#' @importFrom rlang caller_arg
-#' @importFrom stringr str_ends
-deprecatedly = function(f, what, when, with=caller_arg(f), details=NULL, type="warn"){
-  if(!str_ends(with, "\\(\\)")) with=paste0(with,"()")
-  function(...){
-    deprecate_warn(what, when, with, details)
-    f(...)
-  }
-}
 
 #' @noRd
 #' @keywords internal
@@ -175,6 +135,41 @@ cli_menu <- function(prompt, not_interactive, choices, quit = integer(), .envir 
 }
 
 
+#' Allow using tidyselect to select members of a list
+#' Still a bit limited
+#' @noRd
+#' @keywords internal
+#' @importFrom dplyr bind_cols select
+#' @importFrom purrr map
+list_select = function(x, ...){
+  nm = x %>% map(~1) %>% bind_cols() %>% select(...) %>% names()
+  x[nm]
+}
+
+#' arrange, but mixed
+#'
+#' @noRd
+#' @importFrom dplyr across all_of select slice
+#' @examples
+#' df = data.frame(x = c("Control", "Aspirin 10mg/day", "Aspirin 50mg/day",
+#'                       "Aspirin 100mg/day", "Acetomycin 100mg/day",
+#'                       "Acetomycin 1000mg/day"),
+#'                 y=1:6)
+#' df %>% mixed_arrange(x, y)
+#' df %>% mixed_arrange(y, x)
+#' df %>% mixed_arrange(any_of("x"))
+#' df %>% mixed_arrange(any_of("foobar"))
+mixed_arrange = function(.data, ...){
+  cols = .data %>% select(...) %>% names()
+  if(length(cols)==0) return(.data)
+  for(i in rev(cols)){
+    .data = .data %>% 
+      slice(across(all_of(i), mixedorder)[[1]])
+  }
+  .data
+}
+
+
 # Parse zip name ------------------------------------------------------------------------------
 
 #' Parse a file name to get the date of data extraction
@@ -216,28 +211,75 @@ parse_file_projname = function(x){
 
 
 
-#' Get the date of data extraction from the modification time of all files
+#' Get the date of data extraction 
+#' 
+#' Extract it from the folder path, otherwise from the modification time of most files
 #'
-#' @param folder a folder
 #' @return date as a POSIXct scalar
 #' @noRd
 #' @keywords internal
 #' @importFrom cli cli_warn
 #' @importFrom dplyr count slice_max
 get_folder_datetime = function(folder, verbose=TRUE){
-  mtime=NULL
-  rtn = dir(folder, full.names=TRUE) %>% file.info() %>% count(mtime=round(mtime, "secs"))
-  if(isTRUE(verbose) && nrow(rtn)>1){
-    cli_warn(c("Folder {.file {folder}} contains files with different modification times. 
-                    The most frequent one was returned.", 
-                    i="Times: {.val {rtn$mtime}}"),
-                  class="get_folder_datetime_modiftime_warning")
+  folder_datetime = extract_date(folder)
+  if(!is.null(folder_datetime)){
+    attr(folder_datetime, "source") = "folder_path"
+    return(folder_datetime)
   }
-  rtn %>% slice_max(n) %>% .[1,"mtime"]
+  
+  mtime = dir(folder, full.names=TRUE) %>% 
+    file.info() %>% 
+    count(mtime=round(mtime, "secs"), sort=TRUE)
+  folder_datetime = mtime %>% slice_max(n) %>% .[1,"mtime"]
+  attr(folder_datetime, "source") = "folder_modif_time"
+  
+  if(isTRUE(verbose)){
+    extraction_date = format_ymd(folder_datetime)
+    folder_good = folder %>% str_remove("/$") %>% paste0("_", extraction_date)
+    cli_warn(c("Folder {.file {folder}} should identify the extraction date.", 
+               i="Renaming suggestion: {.file {folder_good}/}", 
+               i="The extraction date was estimated based on the last modification date of the files."),
+             class="get_folder_datetime_warning")
+  }
+  if(isTRUE(verbose) && nrow(mtime)>1){
+    cli_warn(c("Folder {.file {folder}} contains files with different modification 
+               times: {.val {mtime$mtime}}.", 
+               i="The most frequent one was returned: {.val {folder_datetime}}."),
+             class="get_folder_datetime_modiftime_warning")
+  }
+  folder_datetime
 }
 
 
-
+#' Extract a datetime from any string
+#' @noRd
+#' @importFrom cli cli_warn
+#' @importFrom dplyr last
+#' @importFrom lubridate parse_date_time
+#' @importFrom stringr str_extract_all str_replace_all
+extract_date = function(x, fmt=NULL, warn_call=parent.frame()){
+  stopifnot(length(x)==1)
+  if(is.null(fmt)){
+    fmt = c("ymd", "ymdHM", "ymdHMS", 
+            "dmy", "dmyHM", "dmyHMS")
+  }
+  rtn = x %>% 
+    str_extract_all("(\\d|\\W|_){8,}") %>% unlist() %>% #8+ numbers or delimiters
+    str_replace_all("\\D", " ") %>% #remove non-numbers
+    parse_date_time(orders=fmt, quiet=TRUE) %>% 
+    na.omit()
+  
+  if(length(rtn)==0) return(NULL)
+  
+  if(length(rtn)>1){
+    cli_warn(c("{.file {x}} contains multiple dates: {.val {rtn}}. The last one was used."),
+             class="extract_date_multiple_warning", 
+             call=warn_call)
+    rtn = last(rtn)
+  }
+  
+  rtn
+}
 
 #' @noRd
 #' @keywords internal
@@ -245,7 +287,8 @@ get_folder_datetime = function(folder, verbose=TRUE){
 #' @importFrom dplyr select
 #' @importFrom rlang is_error
 get_data_name = function(df, crfname=getOption("edc_cols_crfname", "crfname")){
-  if(is_error(df)) return(NA)
+  if(is_error(df) || is.null(df)) return(NA)
+  if(is_edc_error(df)) return("** Error in source file **")
   sel = select(df, any_of2(crfname))
   if(!is.null(attr(df, "data_name"))){
     attr(df, "data_name")
@@ -273,7 +316,10 @@ copy_label_from = function(x, from){
   }
   from_labs = map_chr(from, ~attr(.x, "label") %||% NA)
   mutate(x, across(everything(), ~{
-    attr(.x, "label") = from_labs[cur_column()]
+    lab = unname(from_labs[cur_column()])
+    if(!is.na(lab)){
+      attr(.x, "label") = lab
+    }
     .x
   }))
 }
@@ -334,6 +380,10 @@ guess_read_function = function(file){
     n_colons = unique(stringr::str_count(first_lines, ";"))
     n_commas = unique(stringr::str_count(first_lines, ","))
     
+    if(length(n_colons)==length(n_commas)){
+      if(mean(n_colons>n_commas)>0.5) return(utils::read.csv2) 
+      else return(utils::read.csv)
+    }
     if(length(n_colons)==1 & length(n_commas)!=1) return(utils::read.csv2)
     if(length(n_commas)==1 & length(n_colons)!=1) return(utils::read.csv)
       
@@ -408,7 +458,7 @@ format_ymd = function(x){
 #' @noRd
 #' @keywords internal
 format_ymdhm = function(x){
-  stopifnot(inherits(x, "POSIXct") || inherits(x, "Date"))
+  stopifnot(inherits(x, "POSIXt") || inherits(x, "Date"))
   format(x, "%Y-%m-%d %Hh%M")
 }
 

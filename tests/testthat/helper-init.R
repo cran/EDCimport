@@ -1,8 +1,6 @@
 Sys.setenv(LANGUAGE = "en")
 Sys.setenv(TZ="Europe/Paris")
 
-Sys.setenv("TESTTHAT_CPUS" = 5)
-
 options(
   encoding="UTF-8",
   # warn=0, #default, stacks
@@ -18,7 +16,8 @@ options(
   tidyselect_verbosity ="verbose",#quiet or verbose
   lifecycle_verbosity="warning", #NULL, "quiet", "warning" or "error"
   rlang_backtrace_on_error = "full",
-  testthat.progress.max_fails = 50
+  testthat.progress.max_fails = 50,
+  edc_lookup_check = FALSE
 )
 
 if(is_testing()){
@@ -46,7 +45,6 @@ shhh("rlang")
 shhh("cli")
 shhh("dplyr")
 shhh("purrr")
-# library(tidyverse, warn.conflicts=FALSE)
 
 
 # edc_options(
@@ -85,6 +83,7 @@ clean_cache = function(){
   invisible(TRUE)
 }
 v=utils::View
+wd=function()browseURL(".")
 
 snapshot_review_bg = function(...){
   # brw = function(url) .Call("rs_browseURL", url, PACKAGE="(embedding)")
@@ -192,6 +191,7 @@ tryCatch2 = function(expr){
 }
 
 # clean_cache()
-cli::cli_inform(c(v="Initializer {.file helper-init.R} loaded at {.path {getwd()}}",
-                  i="is_testing={.val {is_testing()}}, is_checking={.val {is_checking()}}, 
+cli::cli_inform(c(i="is_testing={.val {is_testing()}}, 
+                  is_checking={.val {is_checking()}}, 
                   is_parallel={.val {is_parallel()}}"))
+cli::cli_inform(c(v="Initializer {.file helper-init.R} loaded at {.path {getwd()}}"))

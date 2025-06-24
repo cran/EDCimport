@@ -9,8 +9,7 @@ read_trialmaster(
   ...,
   use_cache = "write",
   clean_names_fun = NULL,
-  split_mixed = FALSE,
-  extend_lookup = TRUE,
+  subdirectories = FALSE,
   pw = getOption("trialmaster_pw"),
   verbose = getOption("edc_read_verbose", 1),
   key_columns = "deprecated"
@@ -23,15 +22,13 @@ read_trialmaster(
 
 \item{use_cache}{[\code{mixed(1)}: "write"]\cr controls the \code{.rds} cache. If \code{TRUE}, read the cache if any or extract the archive and create a cache. If \code{FALSE} extract the archive without creating a cache file. Can also be \code{"read"} or \code{"write"}.}
 
-\item{clean_names_fun}{[\code{function}]\cr a function to clean column names, e.g. \link{tolower}, \code{\link[janitor:clean_names]{janitor::clean_names()}},...}
+\item{clean_names_fun}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} use \code{\link[=edc_clean_names]{edc_clean_names()}} instead.}
 
-\item{split_mixed}{[\code{logical(1): FALSE}]\cr whether to split mixed datasets. See \link{split_mixed_datasets}.}
-
-\item{extend_lookup}{[\code{character(1): FALSE}]\cr whether to enrich the lookup table. See \link{extend_lookup}.}
+\item{subdirectories}{[\code{logical(1)}]\cr whether to read subdirectories}
 
 \item{pw}{[\code{character(1)}]\cr The password if the archive is protected. To avoid writing passwords in plain text, it is probably better to use \code{options(trialmaster_pw="xxx")} instead though.}
 
-\item{verbose}{[\code{logical(1)}]\cr one of \code{c(0, 1, 2)}. The higher, the more information will be printed.}
+\item{verbose}{[\code{numeric(1)}]\cr one of \code{c(0, 1, 2)}. The higher, the more information will be printed.}
 
 \item{key_columns}{deprecated}
 }
@@ -41,5 +38,14 @@ a list containing one dataframe for each \code{.xpt} file in the folder, the ext
 \description{
 Import the \code{.zip} archive of a TrialMaster trial export as a list of dataframes. The archive filename should be leaved untouched as it contains the project name and the date of extraction. \cr
 Generate a \code{.rds} cache file for future reads. \cr
-If \verb{7zip} is not installed or available, use \code{\link[=read_tm_all_xpt]{read_tm_all_xpt()}} instead.
+If \verb{7zip} is not installed or available, use \code{\link[=read_all_xpt]{read_all_xpt()}} instead.\cr\cr
+The TM export should be of type \verb{SAS Xport}, with the checkbox
+"Include Codelists" ticked.
 }
+\seealso{
+Other EDCimport reading functions: 
+\code{\link{read_all_csv}()},
+\code{\link{read_all_sas}()},
+\code{\link{read_all_xpt}()}
+}
+\concept{EDCimport reading functions}

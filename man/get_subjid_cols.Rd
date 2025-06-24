@@ -2,12 +2,9 @@
 % Please edit documentation in R/helpers.R
 \name{get_subjid_cols}
 \alias{get_subjid_cols}
-\alias{get_crfname_cols}
 \title{Get key column names}
 \usage{
 get_subjid_cols(lookup = edc_lookup())
-
-get_crfname_cols(lookup = edc_lookup())
 }
 \arguments{
 \item{lookup}{the lookup table}
@@ -22,12 +19,13 @@ Retrieve names of patient ID and CRF name from the actual names of the datasets,
 
 Use \code{edc_options()} to set default values:
 \itemize{
-\item \code{edc_cols_subjid} defaults to \code{c("PTNO", "SUBJID")}
-\item \code{edc_cols_crfname} defaults to \code{c("CRFNAME")}
+\item \code{edc_cols_subjid} defaults to \code{c("SUBJID", "PTNO")}
+\item \code{edc_cols_crfname} defaults to \code{c("FORMDESC", "CRFNAME")}
 }
 }
 
 \examples{
-get_subjid_cols()
-get_crfname_cols()
+#get_subjid_cols()
+#get_crfname_cols()
 }
+\keyword{internal}

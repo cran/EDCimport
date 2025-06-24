@@ -32,12 +32,12 @@ Compare a subject ID vector to the study's reference subject ID (usually somethi
 \code{check_subjid()} is the old, deprecated name.
 }
 \examples{
-tm = edc_example()
-load_list(tm)
-options(edc_subjid_ref=db0$SUBJID)
+db = edc_example()
+load_database(db)
+options(edc_subjid_ref=enrol$subjid)
 #usually, you set something like:
 #options(edc_subjid_ref=enrolres$subjid)
-edc_warn_patient_diffs(db1)
-db1 \%>\% dplyr::filter(SUBJID>1) \%>\% edc_warn_patient_diffs()
-edc_warn_patient_diffs(c(db1$SUBJID, 99, 999))
+edc_warn_patient_diffs(data1)
+data1 \%>\% dplyr::filter(subjid>1) \%>\% edc_warn_patient_diffs(issue_n=NULL)
+edc_warn_patient_diffs(c(data1$subjid, 99, 999))
 }

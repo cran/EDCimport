@@ -20,7 +20,7 @@ table_format(
 
 \item{...}{not used}
 
-\item{ignore_cols}{columns to ignore. Usually meta columns (see \link{get_meta_cols}).}
+\item{ignore_cols}{columns to ignore.}
 
 \item{na_rm}{whether to consider missing values}
 
@@ -30,11 +30,14 @@ table_format(
 a string value in \verb{c("wide", "long", "mixed)}
 }
 \description{
-A dataset is either in the wide format or in the long format (\href{https://towardsdatascience.com/long-and-wide-formats-in-data-explained-e48d7c9a06cb}{link}).
+A dataset is either in the wide format or in the long format.
 This function identifies the format of a dataframe with respect to a subject ID.
 If a dataframe has some wide and long columns, it is considered "mixed".
 }
 \examples{
-tm = edc_example_mixed()
-sapply(tm, table_format, warn=FALSE) 
+db = edc_example()
+sapply(db, table_format, warn=FALSE) 
+}
+\seealso{
+\url{https://tidyr.tidyverse.org/articles/pivot.html}
 }

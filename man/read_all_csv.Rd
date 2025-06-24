@@ -8,10 +8,12 @@ read_all_csv(
   path,
   ...,
   labels_from = NULL,
-  clean_names_fun = NULL,
+  format_file = NULL,
+  subdirectories = FALSE,
   read_fun = "guess",
   datetime_extraction = "guess",
-  verbose = getOption("edc_read_verbose", 1)
+  verbose = getOption("edc_read_verbose", 1),
+  clean_names_fun = NULL
 )
 }
 \arguments{
@@ -19,15 +21,19 @@ read_all_csv(
 
 \item{...}{unused}
 
-\item{labels_from}{[\code{misc}]\cr list of path to file containing the labels.}
+\item{labels_from}{[\code{character(1)}]\cr path to the file containing the labels. See section "Labels file" below.}
 
-\item{clean_names_fun}{[\code{function}]\cr a function to clean column names, e.g. \link{tolower}, \code{\link[janitor:clean_names]{janitor::clean_names()}},...}
+\item{format_file}{[\code{character(1)}]\cr the path to the file that should be used to apply formats. See section "Format file" below. Use \code{NULL} to not apply formats.}
 
-\item{read_fun}{[\code{function}]\cr a function to read the files in path, e.g. \code{read.csv()}, \code{read.csv2()},...}
+\item{subdirectories}{[\code{logical(1)}]\cr whether to read subdirectories}
 
-\item{datetime_extraction}{[\code{dateish(1)}]\cr the datetime of database extraction (database lock). If "guess", the datetime will be inferred from the files modification time.}
+\item{read_fun}{[\code{function}]\cr if "guess" doesn't work properly, a function to read the files in path, e.g. \code{read.csv}, \code{read.csv2},...}
 
-\item{verbose}{[\code{numeric(1)}]\cr the level of verbosity}
+\item{datetime_extraction}{[\code{POSIXt(1)}]\cr the datetime of the data extraction. Default to the most common date of last modification in \code{path}.}
+
+\item{verbose}{[\code{numeric(1)}]\cr one of \code{c(0, 1, 2)}. The higher, the more information will be printed.}
+
+\item{clean_names_fun}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} use \code{\link[=edc_clean_names]{edc_clean_names()}} instead.}
 }
 \value{
 a list containing one dataframe for each \code{.csv} file in the folder, the extraction date (\code{datetime_extraction}), and a summary of all imported tables (\code{.lookup}).
@@ -40,3 +46,44 @@ Read all \code{.csv} files in a directory, with labels if specified.
 \code{labels_from} should contain the information about column labels. It should be a data file (\code{.csv}) containing 2 columns: one for the column name and the other for its associated label. Use \code{options(edc_col_name="xxx", edc_col_label="xxx")} to specify the names of the columns.
 }
 
+\section{Format file}{
+
+\code{format_file} should contain the information about SAS formats. It can be either:
+\itemize{
+\item a \code{procformat.sas} file, containing the whole PROC FORMAT
+\item or a data file (\code{.csv} or \code{.sas7bdat}) containing 3 columns:
+\itemize{
+\item \code{FMTNAME} the SAS format name (repeated)
+\item \code{START} the variable level
+\item \code{LABEL} the label associated to the level
+}
+
+You can get this datafile \href{https://blogs.sas.com/content/sgf/2017/12/04/controlling-your-formats/}{from SAS} using \verb{PROC FORMAT} with option \code{CNTLOUT}.
+Otherwise, you can use \code{options(edc_var_format_name="xxx", edc_var_level="xxx", edc_var_label="xxx")} to specify different column names.
+}
+}
+
+\examples{
+# Create a directory with multiple csv files and a label lookup.
+path = paste0(tempdir(), "/read_all_csv")
+dir.create(paste0(path, "/subdir"), recursive=TRUE)
+write.csv(iris, paste0(path, "/iris.csv"))
+write.csv(mtcars, paste0(path, "/mtcars.csv"))
+write.csv(mtcars, paste0(path, "/subdir/mtcars.csv"))
+write.csv(airquality, paste0(path, "/airquality.csv"))
+labs = c(iris, mtcars, airquality) \%>\% names()
+write.csv(data.frame(name=labs, label=toupper(labs)), paste0(path, "/labels.csv"))
+
+
+db = read_all_csv(path, labels_from="labels.csv", subdirectories=TRUE) \%>\% 
+  set_project_name("My great project")
+db
+edc_lookup()
+}
+\seealso{
+Other EDCimport reading functions: 
+\code{\link{read_all_sas}()},
+\code{\link{read_all_xpt}()},
+\code{\link{read_trialmaster}()}
+}
+\concept{EDCimport reading functions}

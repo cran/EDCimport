@@ -5,12 +5,12 @@
 \alias{get_lookup}
 \title{Retrieve the lookup table from options}
 \usage{
-edc_lookup(..., check_null = TRUE)
+edc_lookup(..., check = TRUE)
 }
 \arguments{
 \item{...}{passed on to \code{\link[dplyr:arrange]{dplyr::arrange()}}}
 
-\item{check_null}{whether to stop if lookup is NULL}
+\item{check}{whether to check for internal consistency}
 }
 \value{
 the lookup dataframe summarizing the database import
@@ -19,11 +19,8 @@ the lookup dataframe summarizing the database import
 Retrieve the lookup table from options
 }
 \examples{
-tm = edc_example()
-load_list(tm)
+db = edc_example()
+load_database(db)
 edc_lookup()
 edc_lookup(dataset)
-}
-\seealso{
-\code{\link[=build_lookup]{build_lookup()}}, \code{\link[=extend_lookup]{extend_lookup()}}
 }

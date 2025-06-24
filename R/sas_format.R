@@ -74,7 +74,7 @@
 #' @keywords internal
 .format_sas_column =  function(x, formats){
   fname = attr(x, "format.sas") #set by haven::read_xpt
-  if (is.null(fname) || !fname %in% names(formats)){
+  if (is.null(fname) || is.null(formats) || !fname %in% names(formats)){
     return(x)
   }
   x %>% 
@@ -88,7 +88,6 @@
 #' @keywords internal
 #' @importFrom dplyr across as_tibble everything mutate na_if where
 #' @importFrom purrr map
-#' @importFrom rlang is_error
 .apply_sas_formats = function(datalist, format_file){
   if(is.null(format_file)) return(datalist)
   assert_file_exists(format_file)
@@ -96,7 +95,7 @@
   sas_formats = .read_sas_formats(format_file)
   datalist %>% 
     map(~{
-      if(!is.data.frame(.x)) return(.x)
+      if(!is.data.frame(.x) || is_lookup(.x)) return(.x)
       .x %>% 
         as_tibble() %>% 
         mutate(
@@ -114,6 +113,7 @@
 #' @importFrom fs path_ext
 .read_sas_formats = function(format_file){
   ext = path_ext(format_file)
+  if(ext=="sas7bcat") return(NULL)
   if(ext=="sas") {
     sas_formats = .read_proc_format(format_file)
   } else {

@@ -6,28 +6,48 @@
 #'
 #' @param path \[`character(1)`]\cr path to the directory containing `.csv` files.
 #' @param ... unused
-#' @param read_fun \[`function`]\cr a function to read the files in path, e.g. `read.csv()`, `read.csv2()`,...
-#' @param labels_from \[`misc`]\cr list of path to file containing the labels.
-#' @param clean_names_fun \[`function`]\cr a function to clean column names, e.g. [tolower], [janitor::clean_names()],...
-#' @param datetime_extraction \[`dateish(1)`]\cr the datetime of database extraction (database lock). If "guess", the datetime will be inferred from the files modification time.
-#' @param verbose \[`numeric(1)`]\cr the level of verbosity
+#' @param labels_from \[`character(1)`]\cr path to the file containing the labels. See section "Labels file" below.
+#' @param read_fun \[`function`]\cr if "guess" doesn't work properly, a function to read the files in path, e.g. `read.csv`, `read.csv2`,...
+#' @param clean_names_fun `r lifecycle::badge("deprecated")` use [edc_clean_names()] instead.
+#' @inheritParams read_all_xpt
 #'
 #' @section Labels file: 
 #' `labels_from` should contain the information about column labels. It should be a data file (`.csv`) containing 2 columns: one for the column name and the other for its associated label. Use `options(edc_col_name="xxx", edc_col_label="xxx")` to specify the names of the columns.
-#'  
+#' 
+#' @inheritSection read_all_xpt Format file
 #'  
 #' @return a list containing one dataframe for each `.csv` file in the folder, the extraction date (`datetime_extraction`), and a summary of all imported tables (`.lookup`).
+#' @family EDCimport reading functions
 #' 
 #' @export
 #' @importFrom fs dir_ls is_dir
 #' @importFrom rlang check_dots_empty
 #' @importFrom utils packageVersion
+#' 
+#' @examples
+#' # Create a directory with multiple csv files and a label lookup.
+#' path = paste0(tempdir(), "/read_all_csv")
+#' dir.create(paste0(path, "/subdir"), recursive=TRUE)
+#' write.csv(iris, paste0(path, "/iris.csv"))
+#' write.csv(mtcars, paste0(path, "/mtcars.csv"))
+#' write.csv(mtcars, paste0(path, "/subdir/mtcars.csv"))
+#' write.csv(airquality, paste0(path, "/airquality.csv"))
+#' labs = c(iris, mtcars, airquality) %>% names()
+#' write.csv(data.frame(name=labs, label=toupper(labs)), paste0(path, "/labels.csv"))
+#' 
+#' 
+#' db = read_all_csv(path, labels_from="labels.csv", subdirectories=TRUE) %>% 
+#'   set_project_name("My great project")
+#' db
+#' edc_lookup()
 read_all_csv = function(path, ..., 
                         labels_from=NULL,
-                        clean_names_fun=NULL, 
+                        format_file=NULL, 
+                        subdirectories=FALSE,
                         read_fun="guess", 
                         datetime_extraction="guess", 
-                        verbose=getOption("edc_read_verbose", 1)){
+                        verbose=getOption("edc_read_verbose", 1),
+                        clean_names_fun=NULL){
   check_dots_empty()
   reset_manual_correction()
   assert(is_dir(path))
@@ -44,9 +64,10 @@ read_all_csv = function(path, ...,
   assert_class(read_fun, c("function"))
 
   clean_names_fun = .get_clean_names_fun(clean_names_fun)
-  rtn = dir_ls(path, regexp="\\.csv") %>% 
-    .read_all(read_fun, clean_names_fun=clean_names_fun) %>% 
+  rtn = dir_ls(path, regexp="\\.csv", recurse=subdirectories) %>% 
+    .read_all(read_fun, clean_names_fun=clean_names_fun, path=path) %>% 
     .add_labels(labels_file=labels_from, path, read_fun) %>% 
+    .apply_sas_formats(format_file) %>%
     .add_lookup_and_date(
       datetime_extraction=datetime_extraction,
       clean_names_fun=clean_names_fun, 
@@ -55,6 +76,7 @@ read_all_csv = function(path, ...,
   
   .set_lookup(rtn$.lookup)
   
+  class(rtn) = "edc_database"
   rtn
 }
 
@@ -64,20 +86,19 @@ read_all_csv = function(path, ...,
 #' @importFrom fs path path_ext_remove
 #' @importFrom purrr map
 .add_labels = function(datalist, labels_file, path, read_fun){
-  if(!is.null(labels_file)){
-    label_df_name = path_ext_remove(basename(labels_file))
-    if(label_df_name %in% names(datalist)) {
-      data_labels = datalist[[label_df_name]]
-      datalist[[label_df_name]] = NULL
-    } else {
-      if(!file.exists(labels_file)) labels_file = path(path, labels_file)
-      assert_file_exists(labels_file)
-      data_labels = read_fun(labels_file)
-    }
-    
-    datalist = map(datalist, ~.apply_label_lookup(.x, data_labels))
+  if(is.null(labels_file)) return(datalist)
+  
+  label_df_name = path_ext_remove(basename(labels_file))
+  if(label_df_name %in% names(datalist)) {
+    data_labels = datalist[[label_df_name]]
+    datalist[[label_df_name]] = NULL
+  } else {
+    if(!file.exists(labels_file)) labels_file = path(path, labels_file)
+    assert_file_exists(labels_file)
+    data_labels = read_fun(labels_file)
   }
-  datalist
+  
+  map(datalist, ~.apply_label_lookup(.x, data_labels))
 }
 
 
@@ -88,6 +109,17 @@ read_all_csv = function(path, ...,
   name_from  = getOption("edc_col_name", default=name_from)
   label_from = getOption("edc_col_label", default=label_from)
   assert_class(data_labels, "data.frame")
+  assert(name_from!=label_from, "Names and labels cannot have the same name in the lookup.")
+  
+  missing_col = setdiff(c(name_from, label_from), names(data_labels))
+  if(length(missing_col)>0){
+    cli_abort(c("The label lookup should contain columns {.val {missing_col}}.",
+                i="It has columns {.val {names(data_labels)}}",
+                i='Use {.code options(edc_col_name="aaa", edc_col_label="bbb")} to 
+                override the default names.'),
+              class="edc_label_missing_col")
+  }
+  
   label_vector = as.data.frame(data_labels) %>%
     select(name=all_of(name_from), label=all_of(label_from)) %>%
     pull(label, name=name)

@@ -8,9 +8,10 @@ read_all_sas(
   path,
   ...,
   format_file = "procformat.sas",
-  clean_names_fun = NULL,
+  subdirectories = FALSE,
   datetime_extraction = "guess",
-  verbose = getOption("edc_read_verbose", 1)
+  verbose = getOption("edc_read_verbose", 1),
+  clean_names_fun = NULL
 )
 }
 \arguments{
@@ -18,28 +19,57 @@ read_all_sas(
 
 \item{...}{unused}
 
-\item{format_file}{[\code{character(1)}]\cr the path to the file that should be used to apply formats. See details. Use \code{NULL} to not apply formats.}
+\item{format_file}{[\code{character(1)}]\cr the path to the file that should be used to apply formats. See section "Format file" below. Use \code{NULL} to not apply formats.}
 
-\item{clean_names_fun}{[\code{function}]\cr a function to clean column names, e.g. \link{tolower}, \code{\link[janitor:clean_names]{janitor::clean_names()}},...}
+\item{subdirectories}{[\code{logical(1)}]\cr whether to read subdirectories}
 
-\item{datetime_extraction}{[\code{POSIXt(1)}]\cr the datetime of the data extraction. Default to the most common date of last modification in \code{directory}.}
+\item{datetime_extraction}{[\code{POSIXt(1)}]\cr the datetime of the data extraction. Default to the most common date of last modification in \code{path}.}
 
-\item{verbose}{[\code{logical(1)}]\cr one of \code{c(0, 1, 2)}. The higher, the more information will be printed.}
+\item{verbose}{[\code{numeric(1)}]\cr one of \code{c(0, 1, 2)}. The higher, the more information will be printed.}
+
+\item{clean_names_fun}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} use \code{\link[=edc_clean_names]{edc_clean_names()}} instead.}
 }
 \value{
 a list containing one dataframe for each \code{.xpt} file in the folder, the extraction date (\code{datetime_extraction}), and a summary of all imported tables (\code{.lookup}).
 }
 \description{
-Read all \code{.sas7bdat} files in a directory. Formats can be applied from a \code{procformat.sas} SAS file, from a .
+Read all \code{.sas7bdat} files in a directory. Formats (factors levels) can be applied from a \code{procformat.sas} SAS file, or from a format dictionary. See the "Format file" section below. Column labels are read directly from the \code{.sas7bdat} files.
 }
 \section{Format file}{
 
-\code{format_file} should contain the information about SAS formats. It can be either
+\code{format_file} should contain the information about SAS formats. It can be either:
 \itemize{
 \item a \code{procformat.sas} file, containing the whole PROC FORMAT
-\item a catalog file (\code{.sas7bcat})
-\item or a data file (\code{.csv} or \code{.sas7bdat}) containing 3 columns: the SAS format name (repeated),
-each level, and its associated label. Use \code{options(edc_var_format_name="xxx", edc_var_level="xxx", edc_var_label="xxx")} to specify the names of the columns.
+\item or a data file (\code{.csv} or \code{.sas7bdat}) containing 3 columns:
+\itemize{
+\item \code{FMTNAME} the SAS format name (repeated)
+\item \code{START} the variable level
+\item \code{LABEL} the label associated to the level
+}
+
+You can get this datafile \href{https://blogs.sas.com/content/sgf/2017/12/04/controlling-your-formats/}{from SAS} using \verb{PROC FORMAT} with option \code{CNTLOUT}.
+Otherwise, you can use \code{options(edc_var_format_name="xxx", edc_var_level="xxx", edc_var_label="xxx")} to specify different column names.
 }
 }
 
+\examples{
+# Create a directory with multiple sas files.
+path = paste0(tempdir(), "/read_all_sas")
+dir.create(paste0(path, "/subdir"), recursive=TRUE)
+haven::write_sas(attenu, paste0(path, "/attenu.sas7bdat"))
+haven::write_sas(mtcars, paste0(path, "/mtcars.sas7bdat"))
+haven::write_sas(mtcars, paste0(path, "/subdir/mtcars.sas7bdat"))
+haven::write_sas(esoph, paste0(path, "/esoph.sas7bdat"))
+
+db = read_all_sas(path, format_file=NULL, subdirectories=TRUE) \%>\% 
+  set_project_name("My great project")
+db
+edc_lookup()
+}
+\seealso{
+Other EDCimport reading functions: 
+\code{\link{read_all_csv}()},
+\code{\link{read_all_xpt}()},
+\code{\link{read_trialmaster}()}
+}
+\concept{EDCimport reading functions}

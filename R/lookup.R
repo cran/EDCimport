@@ -12,12 +12,13 @@
 #' lk
 #' lk %>% tidyr::unnest(c(names, labels))  
 #' 
-#' @export
 #' @seealso [extend_lookup()], [edc_lookup()]
 #' 
+#' @noRd
+#' @keywords internal
 #' @importFrom cli cli_abort
 #' @importFrom dplyr arrange lst mutate
-#' @importFrom purrr map map_dbl
+#' @importFrom purrr discard_at map map_dbl
 #' @importFrom rlang caller_arg is_named
 #' @importFrom tibble tibble
 build_lookup = function(data_list){
@@ -27,11 +28,13 @@ build_lookup = function(data_list){
                 i="{.code class(data_list)}: {.cls {class(data_list)}}"), 
               class="edc_lookup_not_list")
   }
-  data_list_n = format(names(data_list))
-  data_list[".lookup"] = data_list["date_extraction"] = data_list["datetime_extraction"] = NULL
+  datetime_extraction = data_list[["datetime_extraction"]]
+  data_list_nm = names(data_list)
+  exclude = c(".lookup", "date_extraction", "datetime_extraction")
+  data_list = data_list %>% discard_at(exclude)
   if(length(data_list)==0){
     cli_abort(c("{.code data_list} is empty or contains only non-dataframe elements.", 
-                i="{.code names(data_list)}: {.val {data_list_n}}"), 
+                i="{.code names(data_list)}: {.val {data_list_nm}}"), 
               class="edc_lookup_empty")
   }
   if(!is_named(data_list)){
@@ -40,38 +43,59 @@ build_lookup = function(data_list){
   }
   f = function(.x, expr, default) if(is.data.frame(.x)) expr else default
   
-  tibble(dataset=tolower(names(data_list))) %>% 
+  rtn = tibble(dataset=tolower(names(data_list))) %>% 
     mutate(
       nrow=map_dbl(data_list, ~f(.x, nrow(.x), 0)), 
       ncol=map_dbl(data_list, ~f(.x, ncol(.x), 0)), 
       names=map(data_list, ~f(.x, names(.x), NULL)), 
       labels=map(data_list, ~f(.x, get_label(.x), NULL)), 
     ) %>% 
-    arrange(nrow) %>% 
+    arrange(dataset) %>% 
+    structure(datetime_extraction=datetime_extraction) %>% 
     add_class("edc_lookup")
+  
+  rtn
 }
 
 #' Retrieve the lookup table from options
 #' 
 #' @param ... passed on to [dplyr::arrange()]
-#' @param check_null whether to stop if lookup is NULL
+#' @param check whether to check for internal consistency
 #'
 #' @return the lookup dataframe summarizing the database import 
 #' 
 #' @export
-#' @seealso [build_lookup()], [extend_lookup()]
-#' @importFrom cli cli_abort
+#' @importFrom cli cli_abort cli_warn format_inline
 #' @importFrom dplyr arrange enquos
+#' @importFrom purrr discard
 #' 
 #' @examples
-#' tm = edc_example()
-#' load_list(tm)
+#' db = edc_example()
+#' load_database(db)
 #' edc_lookup()
 #' edc_lookup(dataset)
-edc_lookup = function(..., check_null=TRUE){
+edc_lookup = function(..., check=TRUE){
   lookup = edcimport_env$lookup
-  if(is.null(lookup) & isTRUE(check_null)){
-    cli_abort("Lookup is NULL. Did you forget to import your data?")
+  check = getOption("edc_lookup_check", check)
+  if(isTRUE(check)){
+    if(is.null(lookup)){
+      cli_abort("Lookup is {.val NULL}. It will be created after using {.fn EDCimport::read_trialmaster},  {.fn EDCimport::read_trialmaster}, or any other {.pkg EDCimport} reading function.")
+    }
+    caller = parent.frame()
+    missing_dataset = lookup$dataset %>% discard(~exists(.x, where=caller))
+    if(length(missing_dataset) > 0){
+      msg = NULL
+      if(length(missing_dataset) < nrow(lookup)) {
+        msg = c(i=format_inline("Missing datasets: {.val {missing_dataset}}."))
+      }
+      cli_warn(c("Datasets from this lookup are not available in the global environment.",
+                 msg,
+                 i="Did you forget to use {.run EDCimport::load_database(db)} to load the tables?"),
+               class="edc_lookup_missing_dataset_warning",
+               .frequency="once",
+               .frequency_id="edc_lookup"
+      )
+    }
   }
   if(!is.null(lookup)){
     lookup = lookup %>% arrange(!!!enquos(...))
@@ -82,16 +106,15 @@ edc_lookup = function(..., check_null=TRUE){
 
 #' @rdname edc_lookup
 #' @export
-#' @include utils.R
 #' @usage NULL
-get_lookup = deprecatedly(edc_lookup, "0.5.0", "edc_lookup()")
+get_lookup = deprecatedly(edc_lookup, what="get_lookup()", when="0.5.0")
 
 #' @noRd
 #' @keywords internal
 #' @importFrom cli cli_warn
 .set_lookup = function(lookup, verbose=TRUE){
   verbose = getOption("edc_lookup_overwrite_warn", verbose)
-  if(verbose && !is.null(edc_lookup(check_null=FALSE))){
+  if(verbose && !is.null(edc_lookup(check=FALSE))){
     cli_warn("Option {.val edc_lookup} has been overwritten.", 
              class="edc_lookup_overwrite_warn")
   }
@@ -107,6 +130,11 @@ get_lookup = deprecatedly(edc_lookup, "0.5.0", "edc_lookup()")
   invisible(new)
 }
 
+#' @noRd
+#' @keywords internal
+is_lookup = function(x){
+  inherits(x, "edc_lookup")
+}
 
 #' Extend the lookup table
 #' 
@@ -118,20 +146,19 @@ get_lookup = deprecatedly(edc_lookup, "0.5.0", "edc_lookup()")
 #' @param lookup \[`data.frame(1)`]\cr the lookup table
 #' @param id_cols,crf_cols \[`character(n)`]\cr for experts only
 #' @param datasets \[`data.frame(n)`]\cr for experts only
-#' @inheritParams read_tm_all_xpt
+#' @inheritParams read_all_xpt
 #'
 #' @return the lookup, extended
-#' @export
-#' @seealso [build_lookup()], [edc_lookup()]
+#' @noRd
+#' @keywords internal
 #' 
-#' @importFrom cli cli_abort cli_warn
-#' @importFrom dplyr arrange desc filter last_col mutate relocate select
-#' @importFrom purrr keep map map_chr map_dbl map_int map_lgl
+#' @importFrom dplyr arrange desc if_else last_col mutate pull relocate select
+#' @importFrom purrr map map_chr
 #' @importFrom rlang check_dots_empty
 #' @examples
 #' #tm = read_trialmaster("filename.zip", pw="xx")
-#' tm = edc_example_mixed()
-#' load_list(tm)
+#' db = edc_example()
+#' load_database(db)
 #' .lookup
 #' .lookup = extend_lookup(.lookup)
 #' .lookup
@@ -139,26 +166,28 @@ extend_lookup = function(lookup, ...,
                          id_cols = get_subjid_cols(lookup), 
                          crf_cols = get_crfname_cols(lookup), 
                          datasets = get_datasets(lookup, envir=parent.frame())){
-  check_dots_empty()
+  check_dots_empty()  
+  
   #case-insensitive column selection (cf. `any_of2`)
-  f = function(x, colname){
-    rtn = map(colname, ~select(datasets[[x]], any_of2(.x))) %>% 
-      keep(~min(dim(.x))>0)
-    ncols = map_dbl(rtn, ncol) %>% unique()
-    if(length(ncols)>1) cli_abort("Several columns named {.val {colname}} in dataset {.val {x}} with discrepancies.")
-    if(length(ncols)==0 || ncols==0) return(NA)
-    if(ncols>1) cli_warn("Several columns named {.val {colname}} in dataset {.val {x}}.")
-    length(unique(rtn[[1]][[1]]))
+  get_subjid = function(data_name){
+    data = datasets[[data_name]]
+    if(!is.data.frame(data)) return(character(0))
+    if(!any(id_cols %in% names(data))) return(character(0))
+    x = data %>% select(any_of2(id_cols))
+    x %>% pull(1) %>% as.character() %>% unique() %>% sort()
   }
+  
   rtn = lookup %>% 
-    filter(map_lgl(dataset, ~!inherits(datasets[[.x]], "error"))) %>% 
     mutate(
-      n_id = map_int(dataset, ~f(.x, id_cols)),
+      subjids = map(dataset, ~get_subjid(.x)),
+      n_id = lengths(subjids),
       rows_per_id = round(nrow/n_id, 1),
-      crfname = map_chr(dataset, ~get_data_name(datasets[[.x]]), crfname=crf_cols)
+      rows_per_id = if_else(is.nan(rows_per_id) | is.infinite(rows_per_id), NA, rows_per_id),
+      crfname = map_chr(dataset, ~get_data_name(datasets[[.x]], crfname=crf_cols))
     ) %>% 
-    arrange(n_id, desc(nrow)) %>% 
-    relocate(c(names, labels), .after=last_col())
+    arrange(desc(n_id), desc(nrow)) %>% 
+    relocate(c(subjids, names, labels), .after=last_col())
+  
   rtn
 }
 
@@ -167,7 +196,7 @@ extend_lookup = function(lookup, ...,
 
 #' @export
 #' @importFrom cli format_inline rule
-#' @importFrom dplyr select
+#' @importFrom dplyr any_of select
 #' @importFrom utils tail
 print.edc_lookup = function(x, n=Inf, ...){
   extraction = attr(x, "datetime_extraction")
@@ -188,7 +217,7 @@ print.edc_lookup = function(x, n=Inf, ...){
   print(rule(a, col = "violet"))
   
   x_tbl = remove_class(x, "edc_lookup") %>% 
-    select(-names, -labels) %>% 
+    select(-any_of("subjids"), -names, -labels) %>% 
     format(n=n) %>% 
     tail(-1) #remove "A tibble: n × p"
   cat(x_tbl, sep="\n")
