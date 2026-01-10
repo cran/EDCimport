@@ -17,7 +17,8 @@
 #' @return a factor, or `x` untouched.
 #' @export
 #' @importFrom cli cli_abort
-#' @importFrom dplyr case_match case_when 
+#' @importFrom dplyr case_match case_when setdiff
+#' @importFrom purrr map
 #' @importFrom stringr str_detect
 #'
 #' @examples 
@@ -199,6 +200,7 @@ save_sessioninfo = function(path="check/session_info.txt", with_date=TRUE){
 #'
 #' @param db the [edc_database]
 #' @param name the project name
+#' @param lookup the lookup table
 #'
 #' @returns nothing
 #' @export
@@ -208,109 +210,25 @@ save_sessioninfo = function(path="check/session_info.txt", with_date=TRUE){
 #'  set_project_name("My great project")
 #' edc_lookup()
 set_project_name = function(db, name){
-  lookup = db$.lookup %>% 
+  db$.lookup = db$.lookup %>% 
     structure(project_name = name)
-  .update_lookup(new=lookup)
+  .update_lookup(new=db$.lookup)
   db
 }
 
-
-# Joins ---------------------------------------------------------------------------------------
-
-
-#' @noRd
-#' @keywords internal
-#' @importFrom cli cli_abort
-#' @importFrom dplyr all_of everything select setdiff
-#' @importFrom purrr keep
-#' @importFrom rlang as_label caller_call
-.edc_join = function(type){
-  dplyr_join = switch(type, 
-                left=dplyr::left_join, right=dplyr::right_join, 
-                full=dplyr::full_join, inner=dplyr::inner_join)
-  
-  function(x, y, by=NULL, suffix=NULL, cols=everything(), remove_dups=FALSE){
-    subjid_col = get_subjid_cols() %>% intersect(names(x)) %>% intersect(names(y))
-    if(is.null(by)) by = subjid_col
-    if(is.null(suffix)){
-      suffix = c("", paste0("_", as_label(caller_call(0)[[3]])))
-    }
-    
-    if(length(subjid_col)==0 && is.null(by)){
-      cli_abort(c("Could not find a common primary key for {.arg x} and {.arg y}",
-                  i="Primary key in current database: {.val {get_subjid_cols()}}"),
-                class="edc_subjid_not_found")
-    }
-    y = y %>% select(any_of(by), !!enquo(cols))
-    if(isTRUE(remove_dups)){
-      common_col = intersect(names(x), names(y)) %>% 
-        setdiff(by) %>% 
-        keep(~setequal(x[[.x]], y[[.x]]))
-      y = y %>% select(-all_of(common_col))
-    }
-
-    .safe_join(x, y, by=by, suffix=suffix, fun=dplyr_join) %>% 
-      copy_label_from(y) %>% 
-      copy_label_from(x)
-  }
+#' @rdname set_project_name
+#' @returns the name of the project
+#' @export
+get_project_name = function(lookup=edc_lookup()){
+  if(is.null(lookup)) return(NULL)
+  attr(lookup, "project_name")
 }
 
-#' @noRd
-#' @keywords internal
-#' @importFrom dplyr across all_of mutate
-.safe_join = function(x, y, by, suffix, fun){
-  j = tryCatch(fun(x, y, by=by, suffix=suffix),
-               error=function(e) e)
-  if(inherits(j, "dplyr_error_join_incompatible_type")){
-    f = function(d){
-      d %>% mutate(across(all_of(by), ~copy_label_from(as.character(.x), .x)))
-    }
-    x = f(x)
-    y = f(y)
-    j = fun(x, y, by=by, suffix=suffix)
-  } else if(inherits(j, "error")){
-    stop(j)
-  }
-  j
+get_extraction = function(lookup=edc_lookup()){
+  if(is.null(lookup)) return(NULL)
+  attr(lookup, "datetime_extraction")
 }
 
-
-#' Join within the EDCimport framework
-#' 
-#' Perform a join with default `by` to the Subject ID and default suffix to the 
-#' name of the `y` dataset. See `[dplyr::mutate-joins]` for the description of the
-#' join logic.
-#'
-#' @param x,y Data frames to join
-#' @param by The key to join on, as character. Defaults to `get_subjid_cols()`
-#' @param suffix The disambiguation suffix. Defaults to the actual name of the `y` dataset.
-#' @param cols <[tidy-select][dplyr::dplyr_tidy_select]> The columns to select in `y` before joining.
-#' @param remove_dups Whether to remove columns in `y` that already exist in `x`.
-#'
-#' @returns a dataframe
-#' @export
-#'
-#' @examples
-#' db = edc_example()
-#' load_database(db)
-#' data1$common = data2$common = "Common"
-#' x = enrol %>% 
-#'   edc_left_join(data2) %>% 
-#'   edc_right_join(data1)
-#'   
-#' #crfname get a suffix, common 
-#' names(x)
-edc_left_join = .edc_join(type="left")
-
-#' @rdname edc_left_join
-#' @usage NULL
-#' @export
-edc_right_join = .edc_join(type="right")
-
-#' @rdname edc_left_join
-#' @usage NULL
-#' @export
-edc_full_join = .edc_join(type="full")
 
 
 # Manual correction ---------------------------------------------------------------------------
@@ -427,9 +345,9 @@ reset_manual_correction = function(){
 #' @export
 #' @importFrom cli cli_abort cli_warn
 #' @importFrom purrr keep
-get_datasets = function(lookup=edc_lookup(), envir=parent.frame()){
-  if(is.null(lookup)){
-    cli_abort("lookup cannot be NULL, did you forgot to import your database?")
+get_datasets = function(lookup=edc_lookup(), envir=edc_data_env()){
+  if(is.null(lookup) || is.null(envir)){
+    cli_abort("lookup and envir cannot be NULL, did you forgot to import your database?")
   }
   rtn = lookup$dataset %>% 
     mget(envir=envir, ifnotfound=list(NULL), mode="list", inherits=TRUE)
@@ -555,6 +473,11 @@ get_crfname_cols = function(lookup=edc_lookup()){
   rtn %>% na.omit() %>% unique()
 }
 
+#' @noRd
+#' @keywords internal
+edc_data_env = function(){
+  edcimport_env$data_env
+}
 
 
 #' Get columns shared by most datasets
@@ -675,6 +598,7 @@ load_database = function(db, env=parent.frame(), remove=TRUE){
               class="load_database_unnamed_error")
   }
   list2env(db, env)
+  edcimport_env$data_env = env
   
   if(remove) {
     x_name = caller_arg(db)
@@ -723,23 +647,3 @@ save_list = function(x, filename){
   save(list=names(x), file=filename, envir=as.environment(x))
 }
 
-
-
-# Methods -----------------------------------------------------------------
-
-#' @export
-#' @importFrom cli cat_rule cli_bullets cli_vec
-#' @importFrom purrr discard_at keep
-print.edc_database = function(x, ...){
-  x = x %>% keep(is.data.frame) %>% discard_at(".lookup")
-  cat_rule("EDCimport database", col = "violet")
-  nms = cli_vec(names(x), list("vec-trunc"=3))
-  cli_bullets(c(
-    "Contains {length(x)} table{?s}: {.arg {nms}}",
-    i="Use {.run EDCimport::load_database(db)} to load the tables in the global environment.",
-    i="Use {.run EDCimport::edc_lookup()} to see the summary table."
-  ))
-}
-
-#' @export
-print.tm_database = print.edc_database

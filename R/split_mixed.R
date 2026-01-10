@@ -82,6 +82,7 @@ table_format = function(df, id=get_subjid_cols(), ...,
 #' @importFrom dplyr enquo everything
 #' @importFrom purrr discard_at keep
 #' @importFrom rlang as_label check_dots_empty
+#' @importFrom tibble tibble
 #'
 #' @examples
 #' #db = read_trialmaster("filename.zip", pw="xx")
@@ -125,7 +126,10 @@ edc_split_mixed = function(database, datasets=everything(),
   }
   database = c(database, db_mixed)
 
-  database$.lookup = database %>% build_lookup() %>% extend_lookup(datasets=database)
+  database$.lookup = database %>%
+    build_lookup() %>% 
+    extend_lookup(datasets=database) %>% 
+    copy_attributes(.lookup, except=names(attributes(tibble())))
   .set_lookup(database$.lookup, verbose=FALSE)
   
   class(database) = "edc_database"
@@ -153,8 +157,7 @@ split_mixed_datasets = function(datasets=get_datasets(), id=get_subjid_cols(), .
 
   id_found = map_lgl(datasets, ~any(tolower(id) %in% tolower(names(.x))))
   if(!any(id_found)){
-    cli_abort("Patient ID column {.val {id}} was not found in any of 
-              {.arg datasets} ( {.val {names(mixed)}}).",
+    cli_abort("Patient ID column {.val {id}} was not found in any of {.arg datasets}.",
               class="edc_subjid_not_found")
   }
   

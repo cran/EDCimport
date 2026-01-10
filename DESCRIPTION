@@ -1,5 +1,5 @@
 Package: EDCimport
-Version: 0.6.0
+Version: 0.7.0
 Title: Import Data from EDC Software
 Authors@R: 
     c(person(given = "Dan",
@@ -16,8 +16,8 @@ Depends: R (>= 3.6.0)
 Imports: cli, dplyr, forcats, fs, glue, ggplot2, haven, lubridate,
         purrr, readr, rlang, scales, stats, stringr, tibble, tidyr,
         tidyselect, utils, lifecycle
-Suggests: bslib, callr, crosstable, DT, gtools, htmlwidgets, janitor,
-        knitr, openxlsx, patchwork, plotly, quarto, rmarkdown,
+Suggests: bslib, callr, crosstable, DT, gt, gtools, htmlwidgets,
+        janitor, knitr, openxlsx, patchwork, plotly, quarto, rmarkdown,
         rstudioapi, testthat (>= 3.1.8), shiny, usethis, vdiffr, withr
 Encoding: UTF-8
 RoxygenNote: 7.3.2
@@ -26,9 +26,9 @@ Config/testthat/parallel: true
 Config/testthat/start-first: local, trialmaster, utils
 VignetteBuilder: quarto
 NeedsCompilation: no
-Packaged: 2025-06-24 12:14:37 UTC; Dan
+Packaged: 2026-01-10 13:01:04 UTC; Dan
 Author: Dan Chaltiel [aut, cre] (ORCID:
     <https://orcid.org/0000-0003-3488-779X>)
 Maintainer: Dan Chaltiel <dan.chaltiel@gmail.com>
 Repository: CRAN
-Date/Publication: 2025-06-24 12:30:02 UTC
+Date/Publication: 2026-01-10 13:20:02 UTC

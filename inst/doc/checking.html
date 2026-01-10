@@ -161,12 +161,12 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; }
 <p>After running all your checks, you can use <code>edc_data_warnings()</code> to get a summary of all detected issues.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">edc_data_warnings</span>()</span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; # A tibble: 3 × 4</span></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;   issue_n message                                      subjid    data    </span></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;   &lt;chr&gt;   &lt;chr&gt;                                        &lt;list&gt;    &lt;list&gt;  </span></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 1 01      Patients should be &gt;25yo                     &lt;chr [2]&gt; &lt;tibble&gt;</span></span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 2 02      Incorrect adverse event grade                &lt;NULL&gt;    &lt;tibble&gt;</span></span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 3 03      Treated patients should have been seen later &lt;chr [9]&gt; &lt;tibble&gt;</span></span></code></pre></div>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; # A tibble: 3 × 5</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;   issue_n message                                      subjid    data     type </span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;   &lt;chr&gt;   &lt;chr&gt;                                        &lt;list&gt;    &lt;list&gt;   &lt;chr&gt;</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 1 01      Patients should be &gt;25yo                     &lt;chr [2]&gt; &lt;tibble&gt; WARN </span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 2 02      Incorrect adverse event grade                &lt;NULL&gt;    &lt;tibble&gt; WARN </span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 3 03      Treated patients should have been seen later &lt;chr [9]&gt; &lt;tibble&gt; WARN</span></span></code></pre></div>
 </div>
 <h3 id="fatal-error">Fatal error</h3>
 <p>If one check is so mandatory that you cannot work in a database where it fails, use <code>edc_data_stop()</code> instead.</p>

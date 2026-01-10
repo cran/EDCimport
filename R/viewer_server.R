@@ -1,7 +1,10 @@
 
-#' @importFrom dplyr arrange filter if_any lst pick relocate select setdiff
+#' @importFrom dplyr any_of arrange as_tibble case_when filter if_any lst mutate mutate_all pick pull relocate select
+#' @importFrom ggplot2 ggplot labs theme
 #' @importFrom glue glue
-#' @importFrom purrr map map_chr map_dbl
+#' @importFrom purrr map_dbl map_lgl
+#' @importFrom stringr str_remove_all str_replace_all
+#' @importFrom tibble tibble
 edc_viewer_server = function(datasets, lookup) {
   datatable=DT::datatable;formatStyle=DT::formatStyle;renderDT=DT::renderDT
   observe=shiny::observe;observeEvent=shiny::observeEvent;reactiveVal=shiny::reactiveVal;
@@ -10,7 +13,7 @@ edc_viewer_server = function(datasets, lookup) {
   icon=shiny::icon;showModal=shiny::showModal;modalDialog=shiny::modalDialog;
   plotOutput=shiny::plotOutput;renderPlot=shiny::renderPlot;
   updateCheckboxInput=shiny::updateCheckboxInput;textInput=shiny::textInput;
-  actionButton=shiny::actionButton;renderUI=shiny::renderUI;
+  actionButton=shiny::actionButton;renderUI=shiny::renderUI;div=shiny::div;
   showNotification=shiny::showNotification; uiOutput=shiny::uiOutput;
   layout_column_wrap=bslib::layout_column_wrap;styleEqual=DT::styleEqual;
   value_box=bslib::value_box;update_switch=bslib::update_switch;DTOutput=DT::DTOutput;
@@ -20,8 +23,7 @@ edc_viewer_server = function(datasets, lookup) {
   .set_lookup(lookup, verbose=FALSE) #needed for bg launch
   subjid_cols = get_subjid_cols(lookup)
   
-  project_name = attr(lookup, "project_name")
-  if(is.null(project_name)) project_name="" 
+  project_name = attr(lookup, "project_name") %0% ""
   
   function(input, output, session) {
     dataset_selected = reactiveVal(NULL)
@@ -44,23 +46,40 @@ edc_viewer_server = function(datasets, lookup) {
         pull(column)
     })
     
-    #On row selected: show datatable
+    #On row selected: show datatable ----
     observeEvent(input$input_table_rows_selected, {
       selected = input$input_table_rows_selected
       dataset_selected(names(datasets[selected]))
     })
     
-    #on Reset button: reset subjid choice
+    #on Reset button: reset subjid choice ----
     observeEvent(input$reset_subjid, {
       updateSelectInput(session, "subjid_selected", choices=c(ids))
     })
     
-    #on Search type change: update label
+    #on Search type change: update label ----
     observeEvent(input$search_type_value, {
       update_switch("search_type_value", label=ifelse(input$search_type_value, "for value", "for column"))
     })
     
-    #on Button Settings: show the Settings dialog
+    #on Button Data Info: show infos ----
+    observeEvent(input$btn_data_info, {
+      showModal(
+        modalDialog(
+          id="modal_data_info",
+          title = glue("Details for dataset `{dataset_selected()}`"),
+          size="xl",
+          card(
+            style="height:75vh; overflow:auto;",
+            DTOutput("data_info")
+          ),
+          easyClose = TRUE,
+          footer = NULL
+        )
+      )
+    })
+    
+    #on Button Settings: show the Settings dialog ----
     observeEvent(input$btn_settings, {
       hide_filtered_default = input$hide_filtered %0% FALSE
       hide_common_default = input$hide_common %0% 0
@@ -83,7 +102,7 @@ edc_viewer_server = function(datasets, lookup) {
       )
     })
     
-    #on Button Search: show the Search dialog
+    #on Button Search: show the Search dialog ----
     observeEvent(input$btn_search, {
       showModal(
         modalDialog(
@@ -113,7 +132,7 @@ edc_viewer_server = function(datasets, lookup) {
       )
     })
     
-    #on Search validation: show results
+    #on Search validation: show results ----
     observeEvent(input$search_validate, {
       req(input$search_input)
       keyword = input$search_input
@@ -149,7 +168,7 @@ edc_viewer_server = function(datasets, lookup) {
       
     })
     
-    #on Button Summary: show modal
+    #on Button Summary: show modal ----
     observeEvent(input$btn_db_summary, {
       output$crf_plot = renderPlot(p1)
       output$patient_gridplot = renderPlot(p2)
@@ -187,23 +206,56 @@ edc_viewer_server = function(datasets, lookup) {
     })
     
     
-    #output: datatable header text
+    #output: datatable header text ----
     output$dataset_name = renderText({
       if(is.null(dataset_selected())) return("Loading")
+      dataset_selected()
+    })
+    output$dataset_dim = renderText({
+      if(is.null(dataset_selected())) return("")
       a = lookup %>% filter(dataset==dataset_selected())
-      layout = ifelse(a$rows_per_id>1, glue("long ({a$rows_per_id} rows per patient)"), "wide")
-      if(nrow(a)==0) return(glue("{name}: Corrupted dataset", name=dataset_selected()))
-      glue("Dataset selected: `{a$dataset}` ({a$nrow} x {a$ncol}) - {a$n_id} patients - {layout}")
+      glue("{a$nrow} x {a$ncol}")
+    })
+    output$dataset_subj = renderText({
+      if(is.null(dataset_selected())) return("")
+      a = lookup %>% filter(dataset==dataset_selected())
+      glue("{a$n_id} patients")
+    })
+    output$dataset_layout = renderText({
+      if(is.null(dataset_selected())) return("")
+      a = lookup %>% filter(dataset==dataset_selected())
+      ifelse(a$rows_per_id>1, glue("long ({a$rows_per_id} rows per patient)"), "wide")
     })
     
-    #output: hide common columns helper text
+    #output: hide common columns helper text ----
     output$hide_common_result = renderText({
       x = hidden_common_cols()
       if(is.null(x)) return("")
       glue("Columns hided: {paste(x, collapse=', ')}")
     })
     
-    #output: sidebar data choice list
+    #output: data information modal on button click ----
+    output$data_info = renderDT({
+      x = datasets[[dataset_selected()]]
+      tibble(
+        "Index"=seq(ncol(x)), 
+        "Column name"=names(x), 
+        "Label"=unlist(get_label(x)),
+        "NA"=map_dbl(x, ~mean(is.na(.x)))
+      ) %>% 
+        datatable(
+          rownames = FALSE,
+          filter = "top",
+          options = lst(
+            scrollX = TRUE, scrollY = "66vh",
+            pageLength = 500,
+            dom = "t", #table only
+          )
+        ) %>%
+        DT::formatPercentage(columns = 4, digits = 1)
+    })
+    
+    #output: sidebar data choice list ----
     output$input_table = renderDT({
       selected_subjid = input$subjid_selected
       all_subjid = unlist(lookup$subjids) %>% unique() %>% sort()
@@ -254,7 +306,7 @@ edc_viewer_server = function(datasets, lookup) {
       rtn
     })
     
-    #output: datatable body
+    #output: datatable body ----
     output$table = renderDT({
       req(dataset_selected())
       subjid_selected = input$subjid_selected
@@ -270,19 +322,19 @@ edc_viewer_server = function(datasets, lookup) {
         filter(if_any(any_of2(subjid_cols), 
                       ~all_selected | .x %in% subjid_selected))
       
-      #ContextMenu: Fixed Column
+      ##ContextMenu: Fixed Column ----
       fixed = input$hidden_fixed %>% stringr::str_split_1("___")
       fixed = c(subjid_cols, fixed, input$hidden_group, input$hidden_color) %>% unique()
       fixed = fixed[nzchar(fixed)] %>% intersect(names(data))
       data = data %>% 
         relocate(any_of2(fixed), .before=1)
       
-      #ContextMenu: Row Group
+      ##ContextMenu: Row Group ----
       i = which(names(data)==input$hidden_group)
       row_group = list(dataSrc = i)
       if(length(i)==0) row_group=NULL
       
-      #ContextMenu: Row Color
+      ##ContextMenu: Row Color ----
       col_color = data[[input$hidden_color]]
       row_style = row_style_col = NULL
       if(!is.null(col_color)){
@@ -353,12 +405,16 @@ edc_viewer_server = function(datasets, lookup) {
 #' @examples
 #' import_to_list("#' @importFrom bslib card card_body sidebar")
 #' import_to_list("shiny actionButton selectInput actionLink tags textOutput")
+#' @importFrom stringr str_remove
 import_to_list = function(x){
   x = str_remove(x, "#' @importFrom ") %>% stringr::str_split_1(" ")
   paste0(x[-1], "=", x[1], "::", x[-1]) %>% paste(collapse=";")
 }
 
-
+#' @noRd
+#' @keywords internal
+#' @importFrom dplyr select
+#' @importFrom purrr keep map
 get_ids = function(datasets, subjid_cols){
   ids = datasets %>%
     keep(is.data.frame) %>% 
@@ -371,12 +427,16 @@ get_ids = function(datasets, subjid_cols){
 }
 
 
+#' @noRd
+#' @keywords internal
 hide_first = function(){
   list(targets=0, visible=FALSE)
 }
 
 #' @importFrom glue glue
 #' @importFrom purrr map_lgl
+#' @noRd
+#' @keywords internal
 dt_ellipsis = function(data, n){
   list(list(
     targets = unname(which(map_lgl(data, ~is.character(.x)||is.factor(.x)))),
@@ -394,6 +454,8 @@ dt_ellipsis = function(data, n){
 #' Set the "label" dataset attribute on the "title" HTML attribute
 #' Makes the column header show the column label on hover
 #' @noRd
+#' @keywords internal
+#' @importFrom glue glue
 #' @importFrom purrr imap_chr
 colnames_with_hover = function(data){
   data %>% 

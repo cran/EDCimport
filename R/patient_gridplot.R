@@ -26,11 +26,11 @@
 #'   edc_patient_gridplot(axes_flip=TRUE, show_grid=TRUE,
 #'                        preprocess=~str_remove(.x, "\\D*")) #remove all non-digits
 #' }
-#' @importFrom cli format_inline
-#' @importFrom dplyr arrange bind_rows mutate
+#' @importFrom cli cli_abort format_inline
+#' @importFrom dplyr any_of arrange bind_rows mutate
 #' @importFrom forcats fct_reorder
 #' @importFrom ggplot2 aes coord_equal element_text geom_tile ggplot labs scale_fill_gradientn scale_fill_manual scale_x_discrete theme theme_minimal
-#' @importFrom purrr imap map map_dbl
+#' @importFrom purrr imap keep map_dbl
 #' @importFrom rlang as_function is_formula
 #' @importFrom tibble tibble
 edc_patient_gridplot = function(sort_rows=TRUE, sort_cols=TRUE, gradient=FALSE,
@@ -127,13 +127,13 @@ edc_patient_gridplot = function(sort_rows=TRUE, sort_cols=TRUE, gradient=FALSE,
     geom_tile(color=show_grid) +
     scale_x_discrete(position = "top") +
     scale_fill +
-    labs(y="Patient ID", x=NULL, fill=fill_name, color="Included",
+    labs(y="Patient ID", x=NULL, fill=fill_name, 
          title=plot_title, subtitle=plot_subtitle) +
     coord_equal() +
     theme_minimal() +
     theme(
       legend.position = "bottom",
-      axis.text.x = element_text(angle = 90L, hjust=0),
+      axis.text.x = element_text(angle=90L, vjust=0.4, hjust=0),
     )
   
 }

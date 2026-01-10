@@ -22,8 +22,8 @@ The **EDCimport** package is designed to simplify the import and management of E
 # Install last version available on CRAN
 install.packages("EDCimport")
 
-# Install development version on Github
-pak::pak("DanChaltiel/EDCimport@v0.5.2.9071")
+# Install development version on GitHub
+pak::pak("DanChaltiel/EDCimport@v0.6.0.9020")
 ```
 
 > [!WARNING]

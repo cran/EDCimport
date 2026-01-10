@@ -43,6 +43,7 @@
 read_all_csv = function(path, ..., 
                         labels_from=NULL,
                         format_file=NULL, 
+                        use_cache="write", 
                         subdirectories=FALSE,
                         read_fun="guess", 
                         datetime_extraction="guess", 
@@ -62,13 +63,14 @@ read_all_csv = function(path, ...,
     read_fun = guess_read_function(files[1])
   }
   assert_class(read_fun, c("function"))
-
   clean_names_fun = .get_clean_names_fun(clean_names_fun)
+
   rtn = dir_ls(path, regexp="\\.csv", recurse=subdirectories) %>% 
-    .read_all(read_fun, clean_names_fun=clean_names_fun, path=path) %>% 
+    .read_all(read_fun, clean_names_fun=clean_names_fun, path=path, 
+              use_cache=use_cache, verbose=verbose) %>% 
     .add_labels(labels_file=labels_from, path, read_fun) %>% 
     .apply_sas_formats(format_file) %>%
-    .add_lookup_and_date(
+    new_edc_database(
       datetime_extraction=datetime_extraction,
       clean_names_fun=clean_names_fun, 
       EDCimport_version=packageVersion("EDCimport")
@@ -76,7 +78,6 @@ read_all_csv = function(path, ...,
   
   .set_lookup(rtn$.lookup)
   
-  class(rtn) = "edc_database"
   rtn
 }
 
@@ -84,7 +85,7 @@ read_all_csv = function(path, ...,
 #' @noRd
 #' @keywords internal
 #' @importFrom fs path path_ext_remove
-#' @importFrom purrr map
+#' @importFrom purrr modify
 .add_labels = function(datalist, labels_file, path, read_fun){
   if(is.null(labels_file)) return(datalist)
   
@@ -98,13 +99,14 @@ read_all_csv = function(path, ...,
     data_labels = read_fun(labels_file)
   }
   
-  map(datalist, ~.apply_label_lookup(.x, data_labels))
+  modify(datalist, ~.apply_label_lookup(.x, data_labels))
 }
 
 
 #' @noRd
 #' @keywords internal
-#' @importFrom dplyr across all_of cur_column everything mutate pull select
+#' @importFrom cli cli_abort
+#' @importFrom dplyr across all_of cur_column everything mutate pull select setdiff
 .apply_label_lookup = function(data, data_labels, name_from="name", label_from="label"){
   name_from  = getOption("edc_col_name", default=name_from)
   label_from = getOption("edc_col_label", default=label_from)

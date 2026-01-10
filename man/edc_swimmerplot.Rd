@@ -6,14 +6,16 @@
 \usage{
 edc_swimmerplot(
   ...,
-  group = NULL,
-  origin = NULL,
   include = NULL,
   exclude = NULL,
+  group = NULL,
+  origin = NULL,
+  data_list = get_datasets(),
   id_subset = "all",
   id_sort = FALSE,
   id_cols = get_subjid_cols(),
   time_unit = c("days", "weeks", "months", "years"),
+  origin_fun = "min",
   aes_color = c("variable", "label"),
   plotly = getOption("edc_plotly", FALSE),
   id = "deprecated",
@@ -24,11 +26,13 @@ edc_swimmerplot(
 \arguments{
 \item{...}{not used}
 
+\item{include, exclude}{a character vector of variables to exclude/include, in the form \code{dataset$column}. Can be a regex (apart from \code{$} symbols that will be automatically escaped). Case-insensitive.}
+
 \item{group}{a grouping variable, given as "dataset$column".}
 
 \item{origin}{a variable to consider as time 0, given as "dataset$column".}
 
-\item{include, exclude}{a character vector of variables to exclude/include, in the form \code{dataset$column}. Can be a regex (apart from \code{$} symbols that will be automatically escaped). Case-insensitive.}
+\item{data_list}{a named list of data.frames to get the dates from. Default to \link{get_datasets}, which retrieve all raw datasets.}
 
 \item{id_subset}{the subjects to include in the plot.}
 
@@ -37,6 +41,8 @@ edc_swimmerplot(
 \item{id_cols}{the subject identifiers columns. Identifiers be coerced as numeric if possible. See \link{get_subjid_cols} if needed.}
 
 \item{time_unit}{if \code{origin!=NULL}, the unit to measure time. One of \code{c("days", "weeks", "months", "years")}.}
+
+\item{origin_fun}{function to summarise the \code{origin} date at the id level if needed. Should be named, or at least have a meaningful function name (see example "summarized origin".}
 
 \item{aes_color}{either \code{variable} ("\{dataset\} - \{column\}") or \code{label} (the column label).}
 
@@ -62,11 +68,20 @@ db = edc_example()
 load_database(db)
 edc_swimmerplot(id_lim=c(5,45))
 
+#fixed origin
 edc_swimmerplot(origin="enrol$enrol_date", time_unit="months", 
                 include=c("data1", "data3"),
                 exclude=c("DATA1$DATE2", "data3$date\\\\d\\\\d"), 
                 id_sort=TRUE)
 
+#summarised origin
+edc_swimmerplot(origin="data1$date2", time_unit="months", 
+                origin_fun=c("average"=~mean(.x, na.rm=TRUE)),
+                include=c("data1", "data3"),
+                exclude=c("DATA1$DATE2", "data3$date\\\\d\\\\d"), 
+                id_sort=TRUE)
+
+#id_subset
 edc_swimmerplot(group="enrol$arm", id_subset=1:10, aes_color="label")
 
 \dontrun{

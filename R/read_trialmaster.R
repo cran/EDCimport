@@ -9,7 +9,6 @@
 #' 
 #'
 #' @param archive \[`character(1)`]\cr the path to the archive
-#' @param use_cache \[`mixed(1)`: "write"]\cr controls the `.rds` cache. If `TRUE`, read the cache if any or extract the archive and create a cache. If `FALSE` extract the archive without creating a cache file. Can also be `"read"` or `"write"`.
 #' @param pw \[`character(1)`]\cr The password if the archive is protected. To avoid writing passwords in plain text, it is probably better to use `options(trialmaster_pw="xxx")` instead though.
 #' @param ... unused
 #'
@@ -20,6 +19,7 @@
 #' @export
 #' @importFrom cli cli_inform
 #' @importFrom fs file_exists path_dir
+#' @importFrom purrr discard keep
 #' @importFrom rlang check_dots_empty
 #' @importFrom utils object.size packageVersion
 read_trialmaster = function(archive, ..., use_cache="write", 
@@ -39,6 +39,7 @@ read_trialmaster = function(archive, ..., use_cache="write",
   cache_file = .get_tm_cache(directory, extract_datetime)
   read_from_cache = file_exists(cache_file) && (isTRUE(use_cache) || use_cache=="read")
   cache_outdated = FALSE
+  # cache_version = "inexistant"
   
   if(read_from_cache){
     rtn = .read_tm_cache(cache_file, clean_names_fun, verbose) %>% 
@@ -47,9 +48,13 @@ read_trialmaster = function(archive, ..., use_cache="write",
     cache_outdated = packageVersion("EDCimport") > cache_version
     if(cache_outdated){
       cli_inform(c(i="Updating cache with latest {.pkg EDCimport} version
-                      (v{cache_version} to v{packageVersion('EDCimport')})"))
+                      (v{cache_version} to v{packageVersion('EDCimport')})"), 
+                 class="edc_read_from_cache_outdated")
     }
   }
+
+# cl = glue("cache_file={cache_file}, file_exists(cache_file)={file_exists(cache_file)}, use_cache={use_cache}, cache_outdated={cache_outdated}, cache_version={cache_version}, pkg_version={packageVersion('EDCimport')}")
+# print(cl)
   
   if(!read_from_cache || cache_outdated){
     rtn = .read_tm_zip(archive=archive, pw=pw, extract_datetime=extract_datetime,
@@ -135,23 +140,23 @@ read_trialmaster = function(archive, ..., use_cache="write",
              class="edc_tm_no_procformat_warning") 
     format_file = NULL
   }
+  projname = parse_file_projname(archive)
   rtn = read_all_xpt(temp_folder, format_file=format_file, 
                      clean_names_fun=clean_names_fun, 
                      key_columns=key_columns,
+                     use_cache=FALSE,
                      subdirectories=subdirectories,
                      datetime_extraction=extract_datetime, 
-                     verbose=verbose)
-  lookup_verbose = FALSE
-  
-  rtn$.lookup = rtn$.lookup %>% 
-    structure(project_name = parse_file_projname(archive))
-  .update_lookup(new=rtn$.lookup)
+                     verbose=0) %>% 
+    set_project_name(projname)
   
   if(isTRUE(use_cache) || use_cache=="write"){
     if(verbose>0) cli_inform("Writing cache file {.file {cache_file}}", class="edc_create_cache")
     saveRDS(rtn, cache_file)
+    if(!file_exists(cache_file)) {
+      cli_warn("Could not save cache file", class="read_tm_zip_no_cache_warning")
+    }
   }
   
-  class(rtn) = "edc_database"
   rtn
 }

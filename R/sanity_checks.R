@@ -91,14 +91,15 @@ edc_warn_patient_diffs = function(x, ref=getOption("edc_subjid_ref"),
 #'
 #' @return nothing
 #' @export
+#' @importFrom cli cli_warn
 #'
 #' @examples
 #' db = edc_example()
 #' load_database(db)
 #' edc_warn_extraction_date()
-#' @importFrom cli cli_warn
 edc_warn_extraction_date = function(max_days=30){
-  a = round(as.numeric(Sys.time() - datetime_extraction))
+  a = difftime(Sys.time(), datetime_extraction, units="days") %>% 
+    round(1)
   if(a>max_days){
     cli_warn("{col_red('- OUTDATED - ')}Data extraction is {col_red(a)} days old.")
   }
@@ -139,17 +140,18 @@ edc_warn_extraction_date = function(max_days=30){
 #' }
 assert_no_duplicate = function(df, by=NULL, id_col=get_subjid_cols()){
   env = current_env()
-  id_col_selected = id_col[tolower(id_col) %in% tolower(names(df))]
+  id_col_selected = names(df)[tolower(names(df)) %in% tolower(id_col)]
   
   if(length(id_col_selected) == 0){
-    cli_abort("Cannot assert the absence of duplicates: no ID column ({.val {id_col}}) in `names(df)`.", 
+    cli_abort("Cannot assert the absence of duplicates: no ID column 
+              ({.val {id_col}}) in `names(df)`.", 
               class="edcimport_assert_no_duplicate_no_col")
   }
   if(length(id_col_selected) > 1){
-    cli_abort("Cannot assert the absence of duplicates: too many ID column ({.val {id_col_selected}}) in `names(df)`.", 
+    cli_abort("Cannot assert the absence of duplicates: too many ID columns 
+              in `names(df)`: {.val {id_col_selected}}.", 
               class="edcimport_assert_no_duplicate_many_col")
   }
-  
   x = df %>% 
     select(any_of2(id_col_selected), {{by}}) %>% 
     count(across(everything())) %>% 
@@ -238,7 +240,7 @@ edc_data_warn = function(df, message, ...,
 #' @export
 #' @importFrom rlang check_dots_empty
 edc_data_stop = function(df, message, ..., 
-                         issue_n="xx", max_subjid=5, 
+                         issue_n=NULL, max_subjid=5, 
                          csv_path=FALSE, 
                          envir=parent.frame(), 
                          col_subjid=get_subjid_cols()){
@@ -256,13 +258,18 @@ edc_data_stop = function(df, message, ...,
 #' @rdname edc_data_warn
 #' @usage edc_data_warnings()
 #' @export
-#' @importFrom dplyr across any_of arrange
+#' @importFrom dplyr slice
 #' @importFrom purrr list_rbind
 edc_data_warnings = function(){
-  edcimport_env$warn_list %>% 
-    list_rbind() %>% 
-    arrange(across(any_of(c("issue_n", "message")))) %>% 
-    add_class("edc_warning_summary")
+  x = edcimport_env$warn_list %>% 
+    list_rbind() 
+  
+  if("issue_n" %in% names(x)){
+    x = x %>% 
+      slice(mixedorder(issue_n))
+  }
+  
+  x %>% add_class("edc_warning_summary")
 }
 
 
@@ -272,21 +279,43 @@ edc_data_warnings = function(){
 #' Each time [edc_data_warn] is used, the warning is saved internally so that a summary can be retrieved using [edc_data_warnings]. This summary can then be saved into a `.xlsx` file using `save_edc_data_warnings()`. 
 #'
 #' @param edc_warnings the result of [edc_data_warnings]
-#' @param path a `.xlsx` file path
+#' @param output_file,output_dir path to a `.xlsx` file. Use special values `{proj_name}` and `{date_extraction}`.
 #' @param overwrite If `TRUE`, overwrite any existing file.
 #' @param open If `TRUE`, overwrite any existing file.
+#' @param hide_resolved If `TRUE`, hide sheets with no data.
+#' @param include_stops If `TRUE`, also include STOP-type warnings.
+#' @param path deprecated
 #'
 #' @returns a logical(1), whether the file could be written, invisibly 
+#' @importFrom cli ansi_strip cli_warn
+#' @importFrom dplyr filter
+#' @importFrom fs dir_create path_dir path_ext
+#' @importFrom rlang check_installed
+#' @importFrom tibble tibble
+#' @importFrom utils browseURL
 #' @export
 save_edc_data_warnings = function(edc_warnings=edc_data_warnings(), 
-                                  path="edc_data_warnings.xlsx",
-                                  overwrite=TRUE, 
-                                  open=FALSE){
+                                  output_file="edc_data_warnings_{project}_{date_extraction}.xlsx",
+                                  output_dir="output/check",
+                                  open=FALSE, 
+                                  overwrite=TRUE, hide_resolved=TRUE, include_stops=FALSE,
+                                  path="deprecated"){
   check_installed("openxlsx", reason="for `save_edc_data_warnings()` to work.")
   assert_class(edc_warnings, "edc_warning_summary", null.ok=FALSE)
+  if(missing(path)){
+    path = get_report_path(output_dir, output_file)
+  }
   assert(path_ext(path)=="xlsx")
+  dir_create(path_dir(path))
+  if(nrow(edc_warnings)==0){
+    cli_warn("No warnings found, nothing to save.")
+    return(FALSE)
+  }
   
-  edc_warnings$issue_n %>% make.unique
+  if(!isTRUE(include_stops)){
+    edc_warnings = edc_warnings %>% 
+      filter(type!="STOP")
+  }
   
   wb = openxlsx::createWorkbook()
   for(i in seq(nrow(edc_warnings))){
@@ -295,8 +324,9 @@ save_edc_data_warnings = function(edc_warnings=edc_data_warnings(),
     sheet = paste0("issue_", x$issue_n)
     data = x$data[[1]]
     color = if(nrow(data)==0) "green" else "red"
-    openxlsx::addWorksheet(wb, sheet, tabColour=color, gridLines=FALSE)
-    openxlsx::writeData(wb, sheet, tibble(date_extraction, x$message), colNames=FALSE)
+    visible = !isTRUE(hide_resolved) || nrow(data)>0
+    openxlsx::addWorksheet(wb, sheet, tabColour=color, visible=visible, gridLines=FALSE)
+    openxlsx::writeData(wb, sheet, tibble(date_extraction, ansi_strip(x$message)), colNames=FALSE)
     openxlsx::writeDataTable(wb, sheet, data, startRow=2)
   }
   rtn = openxlsx::saveWorkbook(wb, path, overwrite=overwrite, returnValue=TRUE)
@@ -313,16 +343,16 @@ save_edc_data_warnings = function(edc_warnings=edc_data_warnings(),
 
 #' @noRd
 #' @keywords internal
-#' @importFrom cli cli_abort cli_vec cli_warn format_inline
+#' @importFrom cli cli_vec cli_warn format_inline
 #' @importFrom dplyr pull
 #' @importFrom fs dir_create
-#' @importFrom rlang caller_arg env_bind
+#' @importFrom rlang env_bind
 #' @importFrom stringr str_ends str_pad
 #' @importFrom tibble tibble
 #' @importFrom utils write.csv2
 .edc_data_condition = function(tbl, message, issue_n, max_subjid, 
-                              csv_path, .envir, 
-                              col_subjid, fun){
+                               csv_path, .envir, 
+                               col_subjid, fun){
   if(is.character(csv_path)){
     assert(str_ends(csv_path, "\\.csv"), call=parent.frame())
     dir_create(dirname(csv_path))
@@ -348,15 +378,15 @@ save_edc_data_warnings = function(edc_warnings=edc_data_warnings(),
                class="edc_data_condition_subjid_multiple_warn", call=parent.frame())
       col_subjid = col_subjid[col_found][1]
     }
-    if(!any(col_found)){
-      cli_abort("Could not find column {.val {col_subjid}} in the input dataset.", 
-                class="edc_data_condition_subjid_error", call=parent.frame())
+    if(any(col_found)){
+      subj = tbl %>% pull(any_of2(col_subjid)) %>% unique() %>% sort()
+      n_subj = length(subj)
+      subj = paste0("#", subj) %>% 
+        cli_vec(style=list("vec_trunc"=max_subjid, "vec-trunc-style"="head"))
+      par_subj = format_inline(" ({n_subj} patient{?s}: {subj})")
+    } else {
+      par_subj = format_inline(" ({nrow(tbl)} row{?s})")
     }
-    subj = tbl %>% pull(any_of2(col_subjid)) %>% unique() %>% sort()
-    n_subj = length(subj)
-    subj = paste0("#", subj) %>% 
-      cli_vec(style=list("vec_trunc"=max_subjid, "vec-trunc-style"="head"))
-    par_subj = format_inline(" ({n_subj} patient{?s}: {subj})")
   }
   
   item_subjid = NULL
@@ -365,7 +395,8 @@ save_edc_data_warnings = function(edc_warnings=edc_data_warnings(),
     item_subjid=list(subj)
   }
   
-  item = tibble(issue_n, message, subjid=item_subjid, data=list(tbl))
+  type = if(identical(fun, cli_abort)) "STOP" else "WARN"
+  item = tibble(issue_n, message, subjid=item_subjid, data=list(tbl), type)
   save_warn_list_item(item)
     
   invisible(tbl)
@@ -375,8 +406,9 @@ save_edc_data_warnings = function(edc_warnings=edc_data_warnings(),
 #' @noRd
 #' @keywords internal
 #' @importFrom cli cli_warn
-#' @importFrom rlang has_name
 #' @importFrom dplyr semi_join
+#' @importFrom rlang has_name
+#' @importFrom stringr str_detect
 save_warn_list_item = function(item){
   stopifnot(nrow(item)==1)
   if(is.na(item$issue_n)) return(NULL)
@@ -431,6 +463,29 @@ format_subj = function(subj, max_subjid=5, par=TRUE){
   rtn
 }
 
+#' @importFrom cli cli_warn
+#' @importFrom fs path path_ext path_ext_remove
+#' @importFrom glue glue
+#' @importFrom stringr str_replace_all
+get_report_path = function(output_dir, output_file){
+  project = get_project_name() %>% edc_make_clean_name(lower=FALSE) %0% NULL
+  date_extraction = get_extraction() %>% format("%Y-%m-%d") %0% NULL
+  output_path = glue(output_file, .null=NULL,
+                     project=project, date_extraction=date_extraction) %>%
+    str_replace_all("__", "_") %>%
+    str_replace_all("_\\.", "\\.")
+  output_path = path(getwd(), output_dir, output_path)
+  if(file.exists(output_path)){
+    output_path2 = paste0(path_ext_remove(output_path), "_bak.", path_ext(output_path))
+    cli_warn("{.arg output_path} already exists and was renamed
+             to {.path {output_path2}}.")
+    if(file.exists(output_path2)){
+      cli_warn("{.arg {output_path2}} already exists and was overwritten.")
+    }
+    file.rename(output_path, output_path2)
+  }
+  output_path
+}
 
 # Deprecated ----------------------------------------------------------------------------------
 

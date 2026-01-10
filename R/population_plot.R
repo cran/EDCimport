@@ -31,12 +31,13 @@
 #' edc_population_plot(l, ref=1:200)
 #' edc_population_plot(l, id_per_row=60)
 #' @importFrom cli cli_abort
-#' @importFrom dplyr bind_cols last mutate
+#' @importFrom dplyr bind_cols mutate
 #' @importFrom ggplot2 aes element_blank facet_wrap geom_tile ggplot labs theme
 #' @importFrom purrr iwalk map
 #' @importFrom rlang is_named
 #' @importFrom tibble tibble
 #' @importFrom tidyr pivot_longer
+#' @importFrom utils tail
 edc_population_plot = function(x, id_per_row=50, ref="first"){
   assert_class(x, "list")
   assert_class(id_per_row, c("numeric", "integer", "double"))
@@ -59,12 +60,12 @@ edc_population_plot = function(x, id_per_row=50, ref="first"){
     mutate(group=cut(subjid, breaks=breaks),
            name=factor(name, levels=rev(names(x))),
            value=fct_yesno(value))
-  dummy = tibble(subjid=range_sup, name=last(df$name), 
-                 value=last(df$value), group=last(df$group))
+  dummy = df %>% tail(1) %>% mutate(subjid=range_sup)
+  
   df %>% 
     ggplot(aes(x=subjid, y=name, fill=value)) +
     geom_tile(color="black") +
-    geom_tile(data=dummy, fill="transparent") +
+    geom_tile(data=dummy, fill=NA, width=1, height=0.9) +
     facet_wrap(~group, ncol=1, scales="free_x", strip.position="right") +
     labs(x="Patient number", y=NULL, fill="Patient included") +
     theme(legend.position="top",

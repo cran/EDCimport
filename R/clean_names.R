@@ -13,6 +13,7 @@
 #' 
 #' @importFrom dplyr rename_with
 #' @importFrom purrr map_if
+#' @importFrom tibble tibble
 #' @export
 #' 
 #' @examples
@@ -30,7 +31,8 @@ edc_clean_names = function(database, clean_fun=NULL){
 
   database$.lookup = database %>% 
     build_lookup() %>% 
-    extend_lookup(datasets=database)
+    extend_lookup(datasets=database) %>% 
+    copy_attributes(.lookup, except=names(attributes(tibble())))
   
   .set_lookup(database$.lookup, verbose=FALSE)
   class(database) = database_class
@@ -43,6 +45,7 @@ edc_clean_names = function(database, clean_fun=NULL){
 #' Avoids a dependency to janitor.
 #'
 #' @param string a string to clean
+#' @param lower whether to convert it to lowercase
 #' @param from the current encoding. passed on to [iconv()]. `""` is the current locale.
 #'
 #' @keywords internal
@@ -51,11 +54,12 @@ edc_clean_names = function(database, clean_fun=NULL){
 #' @source janitor:::old_make_clean_names(), tweaked with iconv for accents
 #' @examples
 #' edc_make_clean_name("àccénts")
-edc_make_clean_name = function (string, from = "") {
+edc_make_clean_name = function (string, lower=TRUE, from = "") {
   old_names <- string
+  if(isTRUE(lower)) old_names <- tolower(old_names)
   new_names <- old_names %>% gsub("'", "", .) %>% gsub("\"", "", .) %>% gsub("%", "percent", .) %>% 
     gsub("^[ ]+", "", .) %>% make.names(.) %>% gsub("[.]+", "_", .) %>% gsub("[_]+", "_", .) %>% 
-    tolower(.) %>% gsub("_$", "", .) %>% iconv(from = from, to = "ASCII//TRANSLIT") %>% 
+    gsub("_$", "", .) %>% iconv(from = from, to = "ASCII//TRANSLIT") %>% 
     str_remove_all("[\r\n]")
   dupe_count <- vapply(seq_along(new_names), function(i) {sum(new_names[i] == new_names[1:i])}, 
                        integer(1))

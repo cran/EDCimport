@@ -1,7 +1,6 @@
 
-#' @importFrom cli format_inline
-#' @importFrom purrr map_dbl
-edc_viewer_ui = function(datasets, lookup){
+
+edc_viewer_ui = function(datasets, lookup, title){
   card=bslib::card;card_body=bslib::card_body;card_header=bslib::card_header;
   card_title=bslib::card_title;page_sidebar=bslib::page_sidebar;sidebar=bslib::sidebar;
   DTOutput=DT::DTOutput;
@@ -14,15 +13,12 @@ edc_viewer_ui = function(datasets, lookup){
   extraction = attr(lookup, "datetime_extraction")
   EDCimport_version = attr(lookup, "EDCimport_version")
   project_name = attr(lookup, "project_name")
-  par_extraction = par_version = par_projname = ""
-  if(!is.null(project_name)) 
-    par_projname = format_inline("- {project_name} ")
-  if(!is.null(extraction)) 
-    par_extraction = format_inline("(extraction of {format_ymd(extraction)}) ")
-  if(!is.null(EDCimport_version)) 
-    par_version = format_inline("- EDCimport v{EDCimport_version}")
-  
-  title = format_inline("{{EDCimport}} Data browsing {par_projname}{par_extraction}{par_version}")
+  window_title = title
+  if(is.null(title)){
+    title = .get_title(extraction, EDCimport_version, project_name)
+    window_title = paste(project_name, " - EDCimport")
+  }
+    
   title_div = div(
     style = "width: 100%; display: flex; justify-content: space-between; align-items: center;",
     title, 
@@ -37,7 +33,7 @@ edc_viewer_ui = function(datasets, lookup){
   )
   
   page_sidebar(
-    window_title = paste(project_name, " - EDCimport"),
+    window_title = window_title,
     title = title_div,
     height = "100vh",
     sidebar = sidebar(
@@ -63,7 +59,18 @@ edc_viewer_ui = function(datasets, lookup){
     ),
     card(
       card_header(
-        textOutput("dataset_name")
+        div(
+          class="datatable-header",
+          div(
+            textOutput("dataset_name"),
+            textOutput("dataset_dim"),
+            textOutput("dataset_subj"),
+            textOutput("dataset_layout"),
+          ),
+          actionButton("btn_data_info", icon=icon("circle-info"), label=NULL) %>% 
+            tooltip("Data info")
+        )
+        
       ),
       card_body(
         DTOutput("table")
@@ -79,3 +86,19 @@ edc_viewer_ui = function(datasets, lookup){
   )
 }
 
+#' @importFrom cli format_inline
+#' @noRd
+#' @keywords internal
+.get_title = function(extraction, EDCimport_version, project_name){
+  par_extraction = par_version = par_projname = ""
+  if(!is.null(project_name)) {
+    par_projname = format_inline("- {project_name} ")
+  }
+  if(!is.null(extraction)) {
+    par_extraction = format_inline("(extraction of {format_ymd(extraction)}) ")
+  }
+  if(!is.null(EDCimport_version)) {
+    par_version = format_inline("- EDCimport v{EDCimport_version}")
+  }
+  format_inline("{{EDCimport}} Data browsing {par_projname}{par_extraction}{par_version}")
+}

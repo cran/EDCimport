@@ -5,17 +5,24 @@
 #' 
 #' @param data A list of dataframes to view. If `NULL`, defaults to the last datasets loaded using EDCimport functions.
 #' @param background Whether the app should run in a background process.
+#' @param title The app title, in the header and the tab label.
 #' @param port The TCP port that the application should listen on. 
+#' @param replace whether to replace a previously running app on the same port. 
+#' @param ... unused
 #'
 #' @export
-#' @importFrom rlang check_installed
+#' @importFrom cli cli_abort
+#' @importFrom dplyr arrange
+#' @importFrom rlang caller_arg check_dots_empty check_installed is_named set_names
 #' @importFrom utils browseURL
-edc_viewer = function(data=NULL, background=TRUE, port=1209){
+edc_viewer = function(data=NULL, ..., background=TRUE, title=NULL, port=1209, replace=FALSE){
   check_installed(c("DT", "bslib", "shiny"), "for `edc_viewer()` to work.")
+  check_dots_empty()
   if(is.null(data)){
     lookup = edc_lookup(dataset)
     datasets = get_datasets(lookup)
   } else {
+    if(inherits(data, "flextable")) data = data$body$dataset
     datasets = data
     if(is.data.frame(data)) datasets = list(data) %>% set_names(caller_arg(data))
     if(!is_named(data)){
@@ -28,42 +35,99 @@ edc_viewer = function(data=NULL, background=TRUE, port=1209){
   }
   shiny_url = paste0("http://127.0.0.1:", port)
   
-  launch_shiny = function(datasets, lookup, port){
-    # devtools::load_all(helpers=FALSE)
-    
-    app = shiny::shinyApp(edc_viewer_ui(datasets, lookup), 
-                          edc_viewer_server(datasets, lookup))
-    shiny::runApp(app, launch.browser=FALSE, port=port)
-  }
   
   if(isTRUE(background)){
-    check_installed("callr", "for `import_review()` to work in background")
-    brw = Sys.getenv("R_BROWSER")
-    
-    if(exists("process", envir=edcimport_env)) {
-      cli_inform("Killing previous background process (PID: {edcimport_env$process$get_pid()})")
-      edcimport_env$process$kill()
-    }
-    
-    edcimport_env$process = callr::r_bg(
-      launch_shiny, 
-      args=list(datasets=datasets, lookup=lookup, port=port), 
-      stdout="out", stderr="errors",
-      package="EDCimport"
-    )
-    if(edcimport_env$process$is_alive()) {
-      cli_inform(c("Shiny app launched in the background (PID: {edcimport_env$process$get_pid()})",
-                   i="Browse at {.url {shiny_url}}"))
-      browseURL(shiny_url)
-    } else {
-      cli_inform(c(x="Error: Shiny app couldn't be launched"))
-    }
+    .run_background(datasets, lookup, title, port, shiny_url, replace)
     return(edcimport_env$process)
   }
   
   browseURL(shiny_url)
-  x=launch_shiny(datasets, lookup, port)
+  x=.launch_shiny(datasets, lookup, title, port)
   invisible(x)
 }
 
 
+#' @noRd
+#' @keywords internal
+.launch_shiny = function(datasets, lookup, title, port){
+  app = shiny::shinyApp(edc_viewer_ui(datasets, lookup, title), 
+                        edc_viewer_server(datasets, lookup))
+  shiny::runApp(app, launch.browser=FALSE, port=port)
+}
+
+#' @noRd
+#' @keywords internal
+#' @importFrom cli cli_inform
+#' @importFrom dplyr lst
+#' @importFrom rlang check_installed
+#' @importFrom utils browseURL
+.run_background = function(datasets, lookup, title, port, shiny_url, replace){
+  check_installed("callr", "for `import_review()` to work in background")
+  cur_port = paste0("port_", port)
+  .check_current_port(cur_port, replace)
+  
+  p = callr::r_bg(
+    .launch_shiny, 
+    args=list(datasets=datasets, lookup=lookup, title=title, port=port), 
+    stdout=NULL, stderr="edc_viewer_errors.txt",
+    package="EDCimport"
+  )
+  
+  viewer_instance = lst(port, lookup, process=p) %>% 
+    structure(class="edc_viewer_instance")
+  edcimport_env$viewers[[cur_port]] = viewer_instance
+  
+  if(p$is_alive()) {
+    pid = p$get_pid()
+    cli_inform(c("Shiny app launched in the background (PID: {pid})",
+                 i="Browse at {.url {shiny_url}}"))
+    browseURL(shiny_url)
+  } else {
+    cli_inform(c(x="Error: Shiny app couldn't be launched", 
+                 i="Is the port used in another session?"))
+  }
+  
+}
+
+#' @noRd
+#' @keywords internal
+#' @importFrom cli cli_abort cli_inform
+#' @importFrom rlang caller_call
+#' @importFrom utils askYesNo
+.check_current_port = function(cur_port, replace){
+  cur_viewer = edcimport_env$viewers[[cur_port]]
+  p = cur_viewer$process
+  if(!is.null(cur_viewer) && p$is_alive()){
+    if(isTRUE(replace)){
+      p$kill()
+      p$wait(2000) #wait for the kill for 2s max
+      if(p$is_alive()) p$kill_tree()
+    } else {
+      print(cur_viewer)
+      cli_abort(c("An EDCviewer instance is already running on port {cur_viewer$port}. Use {.code edc_viewer(..., replace=TRUE)} to replace it."))
+    }
+  }
+}
+
+#' @noRd
+#' @keywords internal
+#' @importFrom purrr map
+.edc_viewer_kill = function(){
+  edcimport_env$viewers %>% map(~.x$process$kill())
+}
+
+#' @noRd
+#' @keywords internal
+#' @export
+#' @importFrom glue glue
+print.edc_viewer_instance = function(x, ...){
+  proj_name = glue(" for {nm}", nm=attr(x$lookup, "project_name")) %0% ""
+  pid = x$process$get_pid()
+  if(x$process$is_alive()){
+    status = glue("running on port {x$port} (PID={pid})")
+  } else {
+    status = glue("not running (PID={pid})")
+  }
+  label = glue("EDCimport viewer{proj_name}, {status}")
+  print(label)
+}

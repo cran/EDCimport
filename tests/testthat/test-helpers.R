@@ -10,8 +10,12 @@ test_that("assert_no_duplicate() works", {
     expect_error(class="edcimport_assert_no_duplicate")
   tibble(ptno=c(1:10, 1:3)) %>% assert_no_duplicate(id_col=c("subjid","PTNO")) %>% 
     expect_error(class="edcimport_assert_no_duplicate")
+  tibble(SUBJID=c(1:10, 1:3)) %>% assert_no_duplicate(id_col=c("subjid")) %>% 
+    expect_error(class="edcimport_assert_no_duplicate")
   tibble(not_subjid=c(1:10)) %>% assert_no_duplicate() %>% 
     expect_error(class="edcimport_assert_no_duplicate_no_col")
+  tibble(subjid=c(1:10, 4), SUBJID=c(1:10, 3)) %>% assert_no_duplicate() %>% 
+    expect_error(class="edcimport_assert_no_duplicate_many_col")
   tibble(subjid=c(1:10, 4), ptno=c(1:10, 3)) %>% assert_no_duplicate(id_col=c("subjid","PTNO")) %>% 
     expect_error(class="edcimport_assert_no_duplicate_many_col")
   
@@ -26,6 +30,18 @@ test_that("assert_no_duplicate() works", {
     expect_error(class="edcimport_assert_no_duplicate")
   df %>% assert_no_duplicate(by=c(visit, group)) %>% 
     expect_silent()
+})
+
+
+
+test_that("Modifiers don't strip attributes", {
+  a = edc_example() %>% 
+    edc_clean_names() %>% 
+    edc_unify_subjid() %>%
+    edc_split_mixed() %>%
+    .[[".lookup"]] %>% 
+    attributes()
+  expect_contains(names(a), c("datetime_extraction", "EDCimport_version", "project_name"))
 })
 
 
@@ -132,6 +148,9 @@ test_that("edc_xxx_join() works", {
   b$patno = b$subjid
   x = a %>%
     edc_left_join(b, by=c("patno", "subjid"), cols=arm)
+  local_options(override_subjid_cols=c("patno", "subjid"))
+  x = a %>%
+    edc_left_join(b, cols=arm)
   expect_true(all(c("subjid", "patno", "arm") %in% names(x)))
   expect_equal(get_label(x$subjid), get_label(a2$subjid)) 
   

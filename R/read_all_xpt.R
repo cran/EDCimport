@@ -9,6 +9,7 @@
 #' @param format_file \[`character(1)`]\cr the path to the file that should be used to apply formats. See section "Format file" below. Use `NULL` to not apply formats.
 #' @param datetime_extraction \[`POSIXt(1)`]\cr the datetime of the data extraction. Default to the most common date of last modification in `path`.
 #' @param ... unused
+#' @param use_cache \[`mixed(1)`: "write"]\cr controls the `.rds` cache. If `TRUE`, read the cache if any or extract the archive and create a cache. If `FALSE` extract the archive without creating a cache file. Can also be `"read"` or `"write"`.
 #' @param clean_names_fun `r lifecycle::badge("deprecated")` use [edc_clean_names()] instead.
 #' @param subdirectories \[`logical(1)`]\cr whether to read subdirectories
 #' @param verbose \[`numeric(1)`]\cr one of `c(0, 1, 2)`. The higher, the more information will be printed.
@@ -51,6 +52,7 @@
 read_all_xpt = function(path, ..., 
                         format_file="procformat.sas", 
                         datetime_extraction="guess", 
+                        use_cache="write", 
                         subdirectories=FALSE,
                         verbose=getOption("edc_read_verbose", 1), 
                         clean_names_fun=NULL,
@@ -67,10 +69,11 @@ read_all_xpt = function(path, ...,
   assert_class(datetime_extraction, c("POSIXt", "Date"))
   format_file = .locate_file(format_file, path)
   rtn = dir_ls(path, regexp="\\.xpt$", recurse=subdirectories) %>% 
-    .read_all(haven::read_xpt, clean_names_fun=clean_names_fun, path=path) %>%
+    .read_all(haven::read_xpt, clean_names_fun=clean_names_fun, path=path, use_cache=use_cache, 
+              verbose=verbose) %>%
     .clean_labels_utf8() %>% 
     .apply_sas_formats(format_file) %>% 
-    .add_lookup_and_date(
+    new_edc_database(
       datetime_extraction=datetime_extraction,
       clean_names_fun=.get_clean_names_fun(clean_names_fun), 
       EDCimport_version=packageVersion("EDCimport")
@@ -80,7 +83,6 @@ read_all_xpt = function(path, ...,
   .warn_bad_columns(rtn)
   .set_lookup(rtn$.lookup)
   
-  class(rtn) = "edc_database"
   rtn
 }
 

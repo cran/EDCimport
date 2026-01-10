@@ -136,6 +136,12 @@ is_lookup = function(x){
   inherits(x, "edc_lookup")
 }
 
+#' @noRd
+#' @keywords internal
+is_dataset = function(x){
+  is.data.frame(x) && !is_lookup(x)
+}
+
 #' Extend the lookup table
 #' 
 #' This utility extends the lookup table to include: 
@@ -228,5 +234,6 @@ print.edc_lookup = function(x, n=Inf, ...){
 
 clean_lookup = function(){
   edcimport_env$lookup = NULL
+  edcimport_env$data_env = NULL
   invisible(TRUE)
 }

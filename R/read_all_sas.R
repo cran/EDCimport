@@ -7,11 +7,11 @@
 #' @inheritParams read_all_xpt
 #' @inheritSection read_all_xpt Format file
 #'
-#' @return a list containing one dataframe for each `.xpt` file in the folder, the extraction date (`datetime_extraction`), and a summary of all imported tables (`.lookup`).
+#' @return a list containing one dataframe for each `.sas7bdat` file in the folder, the extraction date (`datetime_extraction`), and a summary of all imported tables (`.lookup`).
 #' @export
 #' @family EDCimport reading functions
 #' 
-#' @importFrom fs dir_exists dir_ls path_ext
+#' @importFrom fs dir_exists dir_ls
 #' @importFrom rlang check_dots_empty
 #' @importFrom utils packageVersion
 #' 
@@ -30,6 +30,7 @@
 #' edc_lookup()
 read_all_sas = function(path, ..., 
                         format_file="procformat.sas", 
+                        use_cache="write", 
                         subdirectories=FALSE,
                         datetime_extraction="guess", 
                         verbose=getOption("edc_read_verbose", 1), 
@@ -47,9 +48,9 @@ read_all_sas = function(path, ...,
   
   rtn = dir_ls(path, regexp="\\.sas7bdat$", recurse=subdirectories) %>% 
     .read_all(haven::read_sas, clean_names_fun=clean_names_fun, 
-              catalog_file=catalog_file, path=path) %>%
+              catalog_file=catalog_file, path=path, use_cache=use_cache, verbose=verbose) %>%
     .clean_labels_utf8() %>% 
-    .add_lookup_and_date(
+    new_edc_database(
       datetime_extraction=datetime_extraction,
       clean_names_fun=.get_clean_names_fun(clean_names_fun), 
       EDCimport_version=packageVersion("EDCimport")
@@ -60,9 +61,10 @@ read_all_sas = function(path, ...,
   .warn_bad_columns(rtn)
   .set_lookup(rtn$.lookup)
   
-  class(rtn) = "edc_database"
   rtn
 }
 
+#' @importFrom fs path_ext
 .is_catalog = function(x) !is.null(x) && path_ext(x)=="sas7bcat"
+#' @importFrom fs path_ext
 .is_not_catalog = function(x) !is.null(x) && path_ext(x) %in% c("sas", "sas7bdat", "csv")

@@ -12,10 +12,12 @@
 #' @param group a grouping variable, given as "dataset$column".
 #' @param origin a variable to consider as time 0, given as "dataset$column".
 #' @param include,exclude a character vector of variables to exclude/include, in the form `dataset$column`. Can be a regex (apart from `$` symbols that will be automatically escaped). Case-insensitive.
+#' @param data_list a named list of data.frames to get the dates from. Default to [get_datasets], which retrieve all raw datasets.
 #' @param id_subset the subjects to include in the plot.
 #' @param id_sort whether to sort subjects by date (or time).
 #' @param id_cols the subject identifiers columns. Identifiers be coerced as numeric if possible. See [get_subjid_cols] if needed.
 #' @param time_unit if `origin!=NULL`, the unit to measure time. One of `c("days", "weeks", "months", "years")`.
+#' @param origin_fun function to summarise the `origin` date at the id level if needed. Should be named, or at least have a meaningful function name (see example "summarized origin".
 #' @param aes_color either `variable` ("\{dataset\} - \{column\}") or `label` (the column label).
 #' @param plotly whether to use `{plotly}` to get an interactive plot.
 #' @param id deprecated
@@ -32,11 +34,20 @@
 #' load_database(db)
 #' edc_swimmerplot(id_lim=c(5,45))
 #' 
+#' #fixed origin
 #' edc_swimmerplot(origin="enrol$enrol_date", time_unit="months", 
 #'                 include=c("data1", "data3"),
 #'                 exclude=c("DATA1$DATE2", "data3$date\\d\\d"), 
 #'                 id_sort=TRUE)
 #' 
+#' #summarised origin
+#' edc_swimmerplot(origin="data1$date2", time_unit="months", 
+#'                 origin_fun=c("average"=~mean(.x, na.rm=TRUE)),
+#'                 include=c("data1", "data3"),
+#'                 exclude=c("DATA1$DATE2", "data3$date\\d\\d"), 
+#'                 id_sort=TRUE)
+#' 
+#' #id_subset
 #' edc_swimmerplot(group="enrol$arm", id_subset=1:10, aes_color="label")
 #' 
 #' \dontrun{
@@ -44,26 +55,33 @@
 #' save_plotly(p, "edc_swimmerplot.html")
 #' }
 #' @importFrom cli cli_abort
-#' @importFrom dplyr arrange left_join mutate n_distinct sym
+#' @importFrom dplyr arrange filter left_join mutate n_distinct summarise sym
+#' @importFrom forcats fct_reorder
 #' @importFrom ggplot2 aes facet_wrap geom_line geom_point geom_vline ggplot labs
 #' @importFrom glue glue
-#' @importFrom purrr list_rbind
+#' @importFrom lifecycle deprecate_warn
+#' @importFrom purrr list_rbind map
 #' @importFrom rlang check_dots_empty check_installed
 #' @importFrom stringr str_ends str_remove
 edc_swimmerplot = function(..., 
-                           group=NULL, origin=NULL, 
                            include=NULL,
                            exclude=NULL,
+                           group=NULL, origin=NULL, 
+                           data_list=get_datasets(),
                            id_subset="all",
                            id_sort=FALSE, 
                            id_cols=get_subjid_cols(), 
                            time_unit=c("days", "weeks", "months", "years"),
+                           origin_fun="min",
                            aes_color=c("variable", "label"), 
                            plotly=getOption("edc_plotly", FALSE),
                            id="deprecated",
                            id_lim="deprecated",
                            .lookup="deprecated"){
   check_dots_empty()
+  assert_class(data_list, "list")
+  map(data_list, ~assert_class(.x, "data.frame"))
+  
   aes_color = match.arg(aes_color)
   aes_label = if(aes_color=="variable") "label" else "variable"
   time_unit = match.arg(time_unit[1], c(time_unit, str_remove(time_unit, "s$")))
@@ -74,7 +92,7 @@ edc_swimmerplot = function(...,
     id_cols = id
   }
   
-  dat = get_datasets(envir=parent) %>% 
+  dat = data_list %>% 
     .discard_if_no_id(id=id_cols) %>% 
     .select_dates(id=id_cols) %>% 
     .pivot_dates(id=id_cols) %>% 
@@ -107,20 +125,34 @@ edc_swimmerplot = function(...,
   aes_x = "date"
   vline = NULL
   if(!is.null(origin)){
+    origin_fun = .parse_origin_fun(origin_fun)
     dat_origin = parse_var(origin, id_cols, parent) %>% 
-      mutate(id=as.character(id))
+      mutate(id=as.character(id)) %>% 
+      summarise(n=n_distinct(origin),
+                origin=origin_fun$fun(origin), 
+                .by=id)
+    
     values = c(days=1, weeks=7, months=365.24/12, years=365.24)
     if(!inherits(dat_origin$origin, c("Date", "POSIXt"))){
       cli_abort("Column {.arg origin} ({.val {origin}}) should be of class
                 {.cls Date} or {.cls POSIXt}, not {.cls {class(dat_origin$origin)}}.", 
                 class="edc_swimplot_origin_notdate")
     }
+    
     dat = dat %>%
       left_join(dat_origin, by="id") %>% 
       mutate(
         time = as.double(date-origin, units="days") / values[time_unit]
       )
+    if(!origin %in% include){
+      dat = dat %>% 
+        filter(variable!=.env$origin)
+    }
+    
     x_label = glue("Date difference from `{origin}` (in {time_unit})")
+    if(max(dat_origin$n)>1){
+      x_label = glue("Date difference from `{origin_fun$name}({origin})` (in {time_unit})")
+    }
     tooltip = c(tooltip, "date")
     aes_x = "time"
     vline = geom_vline(xintercept=0)
@@ -179,7 +211,7 @@ edc_swimmerplot = function(...,
 #' @noRd
 #' @keywords internal
 #' @importFrom cli cli_abort
-#' @importFrom dplyr rename select where
+#' @importFrom dplyr mutate rename select where
 #' @importFrom purrr discard map
 .select_dates = function(datasets, id){
   data_dates = datasets %>% 
@@ -231,10 +263,9 @@ edc_swimmerplot = function(...,
   data
 }
 
-#' @importFrom cli cli_abort cli_warn
-#' @importFrom dplyr filter mutate slice
+#' @importFrom cli cli_abort
+#' @importFrom dplyr filter mutate
 #' @importFrom forcats as_factor
-#' @importFrom rlang is_installed
 #' @importFrom stringr str_detect
 .parse_id_to_numeric = function (data, id, id_lim) {
   if(is.null(id_lim) || identical(id_lim, "deprecated")) id_lim =c(-Inf, Inf)
@@ -247,9 +278,9 @@ edc_swimmerplot = function(...,
       mutate(id = as.numeric(id)) %>% 
       filter(id>=id_lim[1] & id<=id_lim[2])
   } else if(all(str_detect(data$id, "\\d+"))){
-      data = data %>% 
-        mixed_arrange(id) %>% 
-        mutate(id=as_factor(id))
+    data = data %>% 
+      mixed_arrange(id) %>% 
+      mutate(id=as_factor(id))
   }
   data
 }
@@ -260,6 +291,18 @@ edc_swimmerplot = function(...,
   chk = suppressWarnings(rtn$palette(n_levels))
   if(any(is.na(chk))) rtn = ggplot2::scale_colour_hue()
   rtn
+}
+
+#' @importFrom cli cli_abort
+#' @importFrom dplyr lst
+#' @importFrom purrr map
+.parse_origin_fun = function(origin_fun){
+  if(identical(origin_fun, "min")) origin_fun = c(min=min_narm)
+  else if(identical(origin_fun, "max")) origin_fun = c(max=max_narm)
+  if(!is.list(origin_fun)) origin_fun = lst(origin_fun)
+  if(length(origin_fun)!=1) cli_abort("{.arg origin_fun} should be of length {.val 1}.")
+  origin_fun = map(origin_fun, as_function)
+  list(name=names(origin_fun), fun=unname(origin_fun[[1]]))
 }
 
 #' @importFrom cli cli_abort
@@ -307,7 +350,7 @@ parse_var = function(input, id, env){
 #' Save a plotly to an HTML file
 #'
 #' @param p a plot object (`plotly` or `ggplot`)
-#' @param file a file path to save the HTML file
+#' @param file a file path to save the HTML file. Can use the `glue` syntax to add variables.
 #' @param ... passed on to [htmlwidgets::saveWidget]
 #'
 #' @export
@@ -318,10 +361,12 @@ parse_var = function(input, id, env){
 #' db = edc_example()
 #' load_database(db)
 #' p = edc_swimmerplot(id_lim=c(5,45))
-#' save_plotly(p, "graph/swimplots/edc_swimmerplot.html", title="My Swimmerplot")
+#' save_plotly(p, "graph/swimplots_{date_extraction}/edc_swimmerplot.html", 
+#'             title="My Swimmerplot")
 #' }
 #' @importFrom cli cli_abort
 #' @importFrom fs dir_create path_dir
+#' @importFrom glue glue
 #' @importFrom rlang check_installed
 #' @importFrom stringr str_ends
 save_plotly = function(p, file, ...){
@@ -329,6 +374,7 @@ save_plotly = function(p, file, ...){
   check_installed("htmlwidgets", reason="for `save_plotly()` to work.")
   if(inherits(p, "ggplot")) p = plotly::ggplotly(p)
   if(!str_ends(file, "\\.html")) cli_abort('File name should end in ".html"')
+  file = glue(file, .envir=parent.frame())
   dir_create(path_dir(file), recurse=TRUE)
   wd = setwd(path_dir(file))
   on.exit(setwd(wd))

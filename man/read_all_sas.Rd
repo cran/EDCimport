@@ -8,6 +8,7 @@ read_all_sas(
   path,
   ...,
   format_file = "procformat.sas",
+  use_cache = "write",
   subdirectories = FALSE,
   datetime_extraction = "guess",
   verbose = getOption("edc_read_verbose", 1),
@@ -21,6 +22,8 @@ read_all_sas(
 
 \item{format_file}{[\code{character(1)}]\cr the path to the file that should be used to apply formats. See section "Format file" below. Use \code{NULL} to not apply formats.}
 
+\item{use_cache}{[\code{mixed(1)}: "write"]\cr controls the \code{.rds} cache. If \code{TRUE}, read the cache if any or extract the archive and create a cache. If \code{FALSE} extract the archive without creating a cache file. Can also be \code{"read"} or \code{"write"}.}
+
 \item{subdirectories}{[\code{logical(1)}]\cr whether to read subdirectories}
 
 \item{datetime_extraction}{[\code{POSIXt(1)}]\cr the datetime of the data extraction. Default to the most common date of last modification in \code{path}.}
@@ -30,7 +33,7 @@ read_all_sas(
 \item{clean_names_fun}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} use \code{\link[=edc_clean_names]{edc_clean_names()}} instead.}
 }
 \value{
-a list containing one dataframe for each \code{.xpt} file in the folder, the extraction date (\code{datetime_extraction}), and a summary of all imported tables (\code{.lookup}).
+a list containing one dataframe for each \code{.sas7bdat} file in the folder, the extraction date (\code{datetime_extraction}), and a summary of all imported tables (\code{.lookup}).
 }
 \description{
 Read all \code{.sas7bdat} files in a directory. Formats (factors levels) can be applied from a \code{procformat.sas} SAS file, or from a format dictionary. See the "Format file" section below. Column labels are read directly from the \code{.sas7bdat} files.
